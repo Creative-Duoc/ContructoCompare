@@ -1,0 +1,124 @@
+/* ============================================================
+   ConstructoCompare PRO — Design System Global
+   Stack: Next.js + CSS Modules
+   Fuentes: Sora (UI) + JetBrains Mono (precios/código)
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ── VARIABLES ── */
+:root {
+  /* Paleta principal */
+  --blue-dark:   #1E3A5F;
+  --blue-mid:    #2B5080;
+  --blue-light:  #3B72B0;
+  --blue-pale:   #EBF3FF;
+  --orange:      #F57C00;
+  --orange-light:#FF9A30;
+  --orange-pale: #FFF3E0;
+
+  /* Grises */
+  --gray-50:  #F8F9FB;
+  --gray-100: #F0F2F5;
+  --gray-200: #E2E6ED;
+  --gray-300: #C8D0DC;
+  --gray-400: #9BA8BA;
+  --gray-500: #748194;
+  --gray-600: #5A6A7E;
+  --gray-700: #3D4F63;
+  --gray-900: #1A2332;
+
+  /* Estado */
+  --red:   #E53935;
+  --green: #2E7D32;
+  --green-light: #43A047;
+
+  /* Tiendas */
+  --sodimac:  #E53935;
+  --easy:     #43A047;
+  --imperial: #1565C0;
+
+  /* Tipografía */
+  --font:  'Sora', sans-serif;
+  --mono:  'JetBrains Mono', monospace;
+
+  /* Radios */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  /* Sombras */
+  --shadow-sm:  0 1px 4px rgba(30,58,95,.08);
+  --shadow-md:  0 4px 16px rgba(30,58,95,.10);
+  --shadow-lg:  0 8px 32px rgba(30,58,95,.14);
+  --shadow-xl:  0 16px 48px rgba(30,58,95,.18);
+
+  /* Transición */
+  --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Layout */
+  --navbar-h: 60px;
+  --sidebar-w: 360px;
+  --max-content: 1100px;
+}
+
+/* ── RESET ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--gray-50);
+  color: var(--gray-900);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a { text-decoration: none; color: inherit; }
+button { cursor: pointer; border: none; background: none; font-family: inherit; }
+input, select, textarea { font-family: inherit; }
+img { max-width: 100%; display: block; }
+
+/* ── ANIMACIONES GLOBALES ── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .4; }
+}
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+/* ── SKELETON LOADER ── */
+.skeleton {
+  background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 50%, var(--gray-100) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--gray-100); }
+::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
