@@ -34,7 +34,8 @@ DEFAULT_CATEGORY = "General"
 
 
 def pick_price(product: dict) -> int | None:
-    for key in ("precio_internet", "precio_oferta", "precio_normal", "precio_tarjeta"):
+    # Prioridad: tarjeta (más bajo) -> oferta -> internet (normal)
+    for key in ("precio_tarjeta", "precio_oferta", "precio_internet"):
         value = product.get(key)
         if value is not None:
             return int(value)
@@ -95,14 +96,31 @@ async def load(json_path: Path = DEFAULT_JSON) -> None:
             categoria = await get_or_create_categoria(session, DEFAULT_CATEGORY)
             retailer = await get_or_create_retailer(session)
 
-            # --- OPTIMIZACIÓN: Cargar todos los SKUs existentes a la memoria ---
-            print("Cargando caché de productos desde la base de datos...")
+            # --- OPTIMIZACIÓN: Cargar todos los SKUs y sus ÚLTIMOS precios ---
+            print("Cargando caché de productos y precios desde la base de datos...")
             result = await session.execute(select(ProductoMaestro.sku_maestro, ProductoMaestro.id_producto))
             producto_cache = {sku: pid for sku, pid in result.all()}
-            print(f"Caché cargada: {len(producto_cache)} productos existentes.")
+            
+            # Cargar el último precio registrado para cada producto de este retailer
+            from sqlalchemy import func
+            subq = select(
+                PrecioRetailer.id_producto_maestro,
+                func.max(PrecioRetailer.fecha_captura).label("max_fecha")
+            ).where(PrecioRetailer.id_retailer == retailer.id_retailer).group_by(PrecioRetailer.id_producto_maestro).subquery()
+
+            last_prices_query = select(PrecioRetailer.id_producto_maestro, PrecioRetailer.precio_clp).join(
+                subq, (PrecioRetailer.id_producto_maestro == subq.c.id_producto_maestro) & 
+                      (PrecioRetailer.fecha_captura == subq.c.max_fecha)
+            )
+            result_prices = await session.execute(last_prices_query)
+            # Cache de precios: {id_producto: precio_actual}
+            precio_cache = {row.id_producto_maestro: float(row.precio_clp) for row in result_prices.all()}
+
+            print(f"Caché cargada: {len(producto_cache)} productos y {len(precio_cache)} precios históricos.")
 
             inserted = 0
             skipped = 0
+            unchanged = 0
             total_products = len(products)
             
             # Acumularemos aquí los productos nuevos que necesitan ser guardados en la BD
@@ -130,7 +148,7 @@ async def load(json_path: Path = DEFAULT_JSON) -> None:
                 for sku, prod in nuevos_productos.items():
                     producto_cache[sku] = prod.id_producto
 
-            # SEGUNDA PASADA: Preparar e insertar los precios (mucho más rápido en memoria)
+            # SEGUNDA PASADA: Preparar e insertar los precios solo si cambiaron
             precios_a_insertar = []
             for i, product in enumerate(products, 1):
                 progress = i / total_products
@@ -150,9 +168,13 @@ async def load(json_path: Path = DEFAULT_JSON) -> None:
                     continue
 
                 sku = int(sku_raw)
-                
-                # Obtenemos el ID del producto directamente desde la memoria (instantáneo)
                 id_producto = producto_cache.get(sku)
+
+                # VERIFICACIÓN DE CAMBIO DE PRECIO
+                ultimo_precio = precio_cache.get(id_producto)
+                if ultimo_precio is not None and float(ultimo_precio) == float(precio):
+                    unchanged += 1
+                    continue
 
                 precios_a_insertar.append(PrecioRetailer(
                     id_producto_maestro=id_producto,
@@ -166,10 +188,13 @@ async def load(json_path: Path = DEFAULT_JSON) -> None:
             print() # Salto de línea al terminar la barra de progreso
             
             # Guardamos todos los precios de golpe
-            print(f"Guardando {len(precios_a_insertar)} precios en la base de datos...")
-            session.add_all(precios_a_insertar)
+            if precios_a_insertar:
+                print(f"Guardando {len(precios_a_insertar)} nuevos registros de precios...")
+                session.add_all(precios_a_insertar)
+            else:
+                print("No hay cambios de precios para registrar.")
 
-    print(f"Insertados (Precios): {inserted} | Omitidos (sin SKU o precio): {skipped}")
+    print(f"Precios nuevos/cambiados: {inserted} | Sin cambios: {unchanged} | Omitidos: {skipped}")
 
 
 if __name__ == "__main__":
