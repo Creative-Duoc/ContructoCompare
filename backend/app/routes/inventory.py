@@ -1,13 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import func
 from backend.app.database import get_db
 
 # Importamos los Modelos (Base de datos)
-from backend.app.models.inventory import ProductoMaestro, PrecioRetailer
+from backend.app.models.inventory import ProductoMaestro, PrecioRetailer, Categoria, Retailer
 
-# Importamos los Esquemas 
-from backend.app.schemas.inventory import PrecioScraperCreate, PrecioResponse, ProductoResponse
+# Importamos los Esquemas
+from backend.app.schemas.inventory import PrecioScraperCreate, PrecioResponse, ProductoResponse, ProductoSodimacResponse
+
+NOMBRE_RETAILER_SODIMAC = "Sodimac"
 
 router = APIRouter(prefix="/api/v1/inventory", tags=["Inventory Engine"])
 
@@ -41,3 +44,52 @@ async def registrar_precio_scraper(data: PrecioScraperCreate, db: AsyncSession =
 async def obtener_catalogo_maestro(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ProductoMaestro))
     return result.scalars().all()
+
+
+@router.get("/sodimac/productos", response_model=list[ProductoSodimacResponse])
+async def obtener_productos_sodimac(db: AsyncSession = Depends(get_db)):
+    # Obtener el id del retailer Sodimac
+    retailer_result = await db.execute(
+        select(Retailer).where(func.lower(Retailer.nombre_retailer) == NOMBRE_RETAILER_SODIMAC.lower())
+    )
+    retailer = retailer_result.scalars().first()
+    if not retailer:
+        raise HTTPException(status_code=404, detail="Retailer Sodimac no encontrado en la base de datos.")
+
+    # Subconsulta: precio más reciente por producto en Sodimac
+    subq = (
+        select(
+            PrecioRetailer.id_producto_maestro,
+            func.max(PrecioRetailer.fecha_captura).label("ultima_captura"),
+        )
+        .where(PrecioRetailer.id_retailer == retailer.id_retailer)
+        .group_by(PrecioRetailer.id_producto_maestro)
+        .subquery()
+    )
+
+    # JOIN para traer producto + precio más reciente
+    query = (
+        select(
+            ProductoMaestro.id_producto,
+            ProductoMaestro.sku_maestro,
+            ProductoMaestro.nombre_producto,
+            Categoria.nombre_categoria.label("categoria"),
+            PrecioRetailer.precio_clp,
+            PrecioRetailer.disponibilidad,
+            PrecioRetailer.link_producto,
+            PrecioRetailer.fecha_captura,
+        )
+        .join(PrecioRetailer, PrecioRetailer.id_producto_maestro == ProductoMaestro.id_producto)
+        .join(Categoria, Categoria.id_categoria == ProductoMaestro.id_categoria)
+        .join(
+            subq,
+            (subq.c.id_producto_maestro == PrecioRetailer.id_producto_maestro)
+            & (subq.c.ultima_captura == PrecioRetailer.fecha_captura),
+        )
+        .where(PrecioRetailer.id_retailer == retailer.id_retailer)
+        .order_by(ProductoMaestro.nombre_producto)
+    )
+
+    result = await db.execute(query)
+    rows = result.mappings().all()
+    return [ProductoSodimacResponse(**row) for row in rows]

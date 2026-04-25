@@ -260,7 +260,7 @@ class SodimacSprint1Scraper:
 
     def __init__(self) -> None:
         self.root_dir = Path(__file__).resolve().parents[1]
-        self.logger = setup_logger("sodimac_sprint1", self.root_dir / "scraping_errors.log")
+        self.logger = setup_logger("sodimac_sprint1", self.root_dir / "scrapers/logs/craping_errors.log")
         self.robots_guard = RobotsGuard(USER_AGENT, self.logger)
         self.request_timeout_ms = REQUEST_TIMEOUT_MS
 

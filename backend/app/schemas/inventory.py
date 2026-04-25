@@ -32,3 +32,16 @@ class PrecioResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class ProductoSodimacResponse(BaseModel):
+    id_producto: int
+    sku_maestro: int
+    nombre_producto: str
+    categoria: str
+    precio_clp: Decimal
+    disponibilidad: bool
+    link_producto: str
+    fecha_captura: datetime
+
+    class Config:
+        from_attributes = True
