@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from app.database import get_db
+from backend.app.database import get_db
 
 # Importamos los Modelos (Base de datos)
-from app.models.inventory import ProductoMaestro, PrecioRetailer
+from backend.app.models.inventory import ProductoMaestro, PrecioRetailer
 
 # Importamos los Esquemas 
-from app.schemas.inventory import PrecioScraperCreate, PrecioResponse, ProductoResponse
+from backend.app.schemas.inventory import PrecioScraperCreate, PrecioResponse, ProductoResponse
 
 router = APIRouter(prefix="/api/v1/inventory", tags=["Inventory Engine"])
 

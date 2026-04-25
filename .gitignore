@@ -1,19 +1,56 @@
-# Variables de entorno 
+# Secrets and environment files
 .env
+**/.env
+*.env
+*.env.*
+!.env.example
+!**/.env.example
 
-# Entornos virtuales
+# Virtual environments
 venv/
 env/
 .venv/
 
-# Caché de Python (Archivos temporales)
+# Python bytecode and caches
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+*.py[cod]
+*.py,cover
+.python-version
 
-# Logs del sistema
+# Test and tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Build and packaging artifacts
+build/
+dist/
+site/
+.eggs/
+*.egg-info/
+pip-wheel-metadata/
+
+# IDE/editor files
+.idea/
+*.code-workspace
+
+# Logs and temporary files
 *.log
+*.tmp
+tmp/
+temp/
+.tmp_*.py
 
-# Archivos de sistema operativo
+# OS files
 .DS_Store
 Thumbs.db
