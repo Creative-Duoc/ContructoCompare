@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from app.routes import inventory
+from app.routes import inventory, users
 from app.database import engine, Base
 import asyncio
 
@@ -16,7 +17,11 @@ async def startup():
 
 # Incluir las rutas del controlador
 app.include_router(inventory.router)
+app.include_router(users.router) # Se añade el nuevo router de usuarios
 
 @app.get("/")
 async def root():
-    return {"message": "Inventory Service Online"}
+    return {"message": "Inventory Service Online",
+        "modules": ["Inventory", "Users"],
+        "docs": "/docs"
+    }
