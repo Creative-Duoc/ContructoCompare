@@ -2,3 +2,12 @@
 **/data/
 **/data/**
 scraping_errors.log
+__pycache__/
+**/__pycache__/
+*.pyc
+.venv/
+.env
+pycache/
+*.pyc
+.venv/
+venv/
