@@ -1,3 +1,59 @@
+# Secrets and environment files
+.env
+**/.env
+*.env
+*.env.*
+!.env.example
+!**/.env.example
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Python bytecode and caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py[cod]
+*.py,cover
+.python-version
+
+# Test and tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Build and packaging artifacts
+build/
+dist/
+site/
+.eggs/
+*.egg-info/
+pip-wheel-metadata/
+
+# IDE/editor files
+.idea/
+*.code-workspace
+
+# Logs and temporary files
+*.log
+*.tmp
+tmp/
+temp/
+.tmp_*.py
+
+# OS files
+.DS_Store
+Thumbs.db
 # Ignore all files in any data directory
 **/data/
 **/data/**
