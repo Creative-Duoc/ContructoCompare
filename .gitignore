@@ -1,4 +1,18 @@
-# --- DEPENDENCIAS Y BUILD (Frontend) ---
+# --- GENERAL / SYSTEM ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.code-workspace
+*.swp
+
+# --- SECRETS AND ENV (CRÍTICO) ---
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# --- FRONTEND (Next.js / Node) ---
 node_modules/
 .next/
 out/
@@ -7,37 +21,36 @@ dist/
 .vercel
 *.tsbuildinfo
 next-env.d.ts
-
-# --- PYTHON Y ENTORNO (Backend/Scrapers) ---
-.venv/
-venv/
-ENV/
-__pycache__/
-*.py[cod]
-*$py.class
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# --- ARCHIVOS DE DATOS ---
-scrapers/data/bronze/*.json
-database/*.db
-database/*.sqlite
-
-# --- LOGS Y DEBUG ---
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
 
-# --- SISTEMA Y VS CODE ---
-.DS_Store
-.vscode/
-.idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.swp
+# --- BACKEND & SCRAPERS (Python) ---
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- DATA & LOGS (Data Engineering focus) ---
+**/data/
+**/data/**
+scrapers/data/bronze/*.json
+database/*.db
+database/*.sqlite
+*.log
+scraping_errors.log
+temp/
+tmp/
+
+# --- BUILD ARTIFACTS ---
+dist/
+build/
+*.egg-info/
