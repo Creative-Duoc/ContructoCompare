@@ -1,0 +1,192 @@
+.card {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition);
+  animation: fadeUp .35s ease both;
+}
+
+.card:hover {
+  border-color: var(--blue-light);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+/* Header */
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.categoryBadge {
+  font-size: .63rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  background: var(--blue-pale);
+  color: var(--blue-mid);
+  border-radius: 100px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.sku {
+  font-family: var(--mono);
+  font-size: .63rem;
+  color: var(--gray-400);
+}
+
+/* Nombre */
+.name {
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--gray-900);
+  line-height: 1.35;
+}
+
+.brand {
+  font-size: .72rem;
+  color: var(--gray-400);
+  margin-top: 2px;
+}
+
+/* ── Tabla comparativa HU2 ── */
+.compareTable {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.compareRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  cursor: pointer;
+  transition: var(--transition);
+  position: relative;
+}
+
+.compareRow:hover:not(.noStock) {
+  border-color: var(--blue-light);
+  background: var(--blue-pale);
+}
+
+.compareRow.noStock {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+/* HU3 — Mejor precio destacado */
+.compareRow.bestPrice {
+  border-color: var(--green-light);
+  background: #f0fdf4;
+}
+
+.bestBadge {
+  position: absolute;
+  top: -8px;
+  right: 8px;
+  background: var(--green);
+  color: #fff;
+  font-size: .58rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  border-radius: 100px;
+  padding: 2px 8px;
+}
+
+.tiendaDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tiendaName {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--gray-700);
+  flex: 1;
+}
+
+.tiendaPrices {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.precioFinal {
+  font-family: var(--mono);
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--blue-dark);
+}
+
+.precioFinal.oferta {
+  color: var(--orange);
+}
+
+.precioOriginal {
+  font-family: var(--mono);
+  font-size: .65rem;
+  color: var(--gray-400);
+  text-decoration: line-through;
+}
+
+.precioUF {
+  font-family: var(--mono);
+  font-size: .62rem;
+  color: var(--gray-400);
+}
+
+.noStockTag {
+  font-size: .62rem;
+  background: var(--gray-100);
+  color: var(--gray-500);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+/* HU2 — Diferencia vs más caro */
+.savingsTag {
+  font-size: .62rem;
+  font-weight: 700;
+  color: var(--green);
+  background: rgba(46,125,50,.08);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+/* Fecha actualización HU2-AC3 */
+.updatedAt {
+  font-size: .62rem;
+  color: var(--gray-400);
+  text-align: right;
+  font-family: var(--mono);
+}
+
+/* Historial link HU9 */
+.historyBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: .72rem;
+  color: var(--blue-light);
+  font-weight: 600;
+  padding: 0;
+  transition: var(--transition);
+}
+
+.historyBtn:hover { color: var(--orange); }
