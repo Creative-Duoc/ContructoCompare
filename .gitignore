@@ -1,0 +1,4 @@
+# Ignore all files in any data directory
+**/data/
+**/data/**
+scraping_errors.log
