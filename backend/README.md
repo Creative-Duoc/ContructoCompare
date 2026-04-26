@@ -17,7 +17,7 @@ El backend de ConstructoCompare es una API REST robusta construida con **FastAPI
 Crea un archivo `.env` en el directorio `backend/` basándote en el archivo `.env.example`:
 
 ```bash
-cp backend/.env.example backend/.env
+cp .env.example .env
 ```
 
 Configura las siguientes variables:
