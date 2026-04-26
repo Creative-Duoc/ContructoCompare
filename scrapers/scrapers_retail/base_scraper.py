@@ -178,7 +178,7 @@ class BaseStoreScraper:
         self,
         user_agent: str = USER_AGENT,
         request_timeout_ms: int = REQUEST_TIMEOUT_MS,
-        error_log_file: Path = Path("scraping_errors.log"),
+        error_log_file: Path = Path("data/logs/scraping_errors.log"),
     ) -> None:
         self.user_agent = user_agent
         self.request_timeout_ms = request_timeout_ms

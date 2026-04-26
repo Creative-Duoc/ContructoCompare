@@ -1,13 +1,67 @@
-# Ignore all files in any data directory
-**/data/
-**/data/**
-scraping_errors.log
+# Python
 __pycache__/
 **/__pycache__/
-*.pyc
-.venv/
-.env
-pycache/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 .venv/
 venv/
+ENV/
+
+# Next.js / Node
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+out/
+build/
+.pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-store/
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+backend/.env
+
+# Data and Logs
+**/data/
+**/data/**
+*.log
+scraping_errors.log
+scrapers/data/logs/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Scraper specific
+scrapers/data/bronze/
+scrapers/data/silver/
+scrapers/data/gold/
