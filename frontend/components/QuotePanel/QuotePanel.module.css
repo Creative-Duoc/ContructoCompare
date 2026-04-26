@@ -1,0 +1,274 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(30,58,95,.35);
+  z-index: 299;
+  backdrop-filter: blur(2px);
+}
+
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: var(--sidebar-w);
+  max-width: 100vw;
+  height: 100vh;
+  background: #fff;
+  box-shadow: var(--shadow-xl);
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  animation: slideIn .25s ease;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.header h2 {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--blue-dark);
+}
+
+.closeBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gray-500);
+  transition: var(--transition);
+}
+
+.closeBtn:hover { background: var(--gray-100); color: var(--gray-900); }
+
+/* Items list */
+.items {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--gray-400);
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.empty svg { opacity: .35; }
+.empty p { font-size: .85rem; }
+
+/* Item card — HU4 HU5 */
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+}
+
+.itemInfo { flex: 1; min-width: 0; }
+
+.itemName {
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--gray-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemStore {
+  font-size: .72rem;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.itemSubtotal {
+  font-family: var(--mono);
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--blue-dark);
+  margin-top: 4px;
+}
+
+/* HU5 — Controles cantidad */
+.qtyRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.qtyBtn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  font-size: .9rem;
+  font-weight: 700;
+  color: var(--blue-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.qtyBtn:hover { background: var(--blue-pale); border-color: var(--blue-light); }
+
+.qtyVal {
+  font-family: var(--mono);
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--gray-900);
+  min-width: 24px;
+  text-align: center;
+}
+
+.removeBtn {
+  color: var(--gray-400);
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.removeBtn:hover { color: var(--red); }
+
+/* Footer — total + acciones */
+.footer {
+  border-top: 1px solid var(--gray-200);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.totals {
+  background: var(--gray-50);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+
+.totalRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.totalLabel { font-size: .78rem; color: var(--gray-600); }
+
+.totalCLP {
+  font-family: var(--mono);
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--blue-dark);
+}
+
+.totalUF {
+  font-family: var(--mono);
+  font-size: .78rem;
+  color: var(--gray-500);
+}
+
+/* HU6 — Switch UF */
+.ufSwitch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: .8rem;
+  color: var(--gray-600);
+}
+
+.switch {
+  position: relative;
+  width: 40px;
+  height: 22px;
+}
+
+.switch input { opacity: 0; width: 0; height: 0; }
+
+.slider {
+  position: absolute;
+  inset: 0;
+  background: var(--gray-300);
+  border-radius: 100px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.slider::before {
+  content: '';
+  position: absolute;
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: var(--transition);
+}
+
+.switch input:checked + .slider { background: var(--blue-dark); }
+.switch input:checked + .slider::before { transform: translateX(18px); }
+
+/* Botones acción */
+.saveBtn {
+  width: 100%;
+  height: 44px;
+  background: var(--blue-dark);
+  color: #fff;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: .88rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: var(--transition);
+}
+
+.saveBtn:hover { background: var(--blue-mid); }
+
+.pdfBtn {
+  width: 100%;
+  height: 40px;
+  background: var(--orange-pale);
+  color: var(--orange);
+  border: 1px solid rgba(245,124,0,.25);
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: .82rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: var(--transition);
+}
+
+.pdfBtn:hover { background: var(--orange); color: #fff; }
+
+.clearBtn {
+  font-size: .75rem;
+  color: var(--gray-400);
+  text-align: center;
+  padding: 4px;
+  transition: var(--transition);
+}
+
+.clearBtn:hover { color: var(--red); }
