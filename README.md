@@ -7,8 +7,8 @@ ConstructoCompare es una plataforma integral diseñada para el monitoreo y compa
 El proyecto está dividido en tres componentes principales:
 
 - **[Backend](./backend):** API REST construida con FastAPI, encargada de la lógica de negocio, autenticación y gestión de la base de datos (PostgreSQL + SQLAlchemy).
-- **[Scrapers](./scrapers):** Scripts de automatización basados en Playwright para extraer información de productos de sitios web como Sodimac.
-- **[Frontend](./frontend):** (En desarrollo) Interfaz de usuario para la visualización y comparación de los datos recolectados.
+- **[Scrapers](./scrapers):** Scripts de automatización basados en Playwright para extraer información de productos de Sodimac, Easy e Imperial.
+- **[Frontend](./frontend):** Prototipo funcional en Next.js para la visualización, comparación de precios en tiempo real (CLP/UF) y gestión de cotizaciones.
 
 ## 🚀 Inicio Rápido
 
@@ -21,12 +21,13 @@ El proyecto está dividido en tres componentes principales:
 ### Instalación General
 
 1. Clona el repositorio:
+
    ```bash
    git clone <url-del-repositorio>
    cd ContructoCompare
    ```
-
 2. Crea y activa un entorno virtual:
+
    ```bash
    python -m venv .venv
    # Windows:
@@ -34,13 +35,13 @@ El proyecto está dividido en tres componentes principales:
    # Linux/macOS:
    source .venv/bin/activate
    ```
-
 3. Instala las dependencias globales:
+
    ```bash
    pip install -r requirement.txt
    ```
-
 4. Instala los navegadores necesarios para Playwright:
+
    ```bash
    playwright install chromium
    ```
@@ -52,7 +53,6 @@ El proyecto está dividido en tres componentes principales:
 ├── backend/          # API FastAPI y modelos de datos
 ├── frontend/         # Interfaz de usuario (React/Angular)
 ├── scrapers/         # Scripts de extracción de datos (Playwright)
-├── database/         # Scripts DDL y esquemas SQL
 └── requirement.txt   # Dependencias del proyecto
 ```
 
