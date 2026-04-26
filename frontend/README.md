@@ -1,23 +1,66 @@
-# 💻 ConstructoCompare - Frontend
+# ConstructoCompare - Frontend
 
-Este directorio está destinado a la interfaz de usuario de ConstructoCompare.
+Este directorio contiene la interfaz web del proyecto. La app está construida con Next.js y TypeScript y consume la API del backend para mostrar productos, comparar precios y gestionar proyectos.
 
-## 🚧 Estado Actual: En Desarrollo
+## Cuándo usarlo
 
-Actualmente, el frontend se encuentra en fase de planificación y diseño. El objetivo es construir una aplicación web moderna que permita a los usuarios:
+- Para levantar la interfaz local y validar pantallas.
+- Para probar la integración con el backend.
+- Para desarrollar vistas de comparación, historial de precios y proyectos.
 
-- Buscar productos de construcción por nombre o categoría.
-- Comparar precios entre diferentes retailers en tiempo real.
-- Visualizar historiales de precios.
-- Gestionar listas de materiales para proyectos.
+## Requisitos
 
-## 🛠️ Tecnologías Previstas
+- Node.js
+- pnpm
+- El backend ejecutándose en `http://localhost:8001`
 
-- **Framework:** React con TypeScript o Angular.
-- **Estilos:** CSS nativo o Tailwind CSS.
-- **Estado:** Redux Toolkit o Context API.
-- **Cliente API:** Axios o Fetch API.
+## Instalación
 
-## 🔌 Conexión con el Backend
+```bash
+pnpm install
+```
 
-El frontend se comunicará con la API de FastAPI (por defecto en `http://localhost:8001/api/v1`). Asegúrate de configurar correctamente los orígenes de CORS en el backend para permitir la conexión desde el servidor de desarrollo del frontend.
+## Cómo ejecutar
+
+Modo desarrollo:
+
+```bash
+pnpm dev
+```
+
+Construcción para producción:
+
+```bash
+pnpm build
+```
+
+Arranque en producción:
+
+```bash
+pnpm start
+```
+
+Validación de lint:
+
+```bash
+pnpm lint
+```
+
+## Qué hace la app
+
+- Busca productos por nombre o categoría.
+- Compara precios entre retailers.
+- Muestra historial de precios.
+- Permite gestionar proyectos y cotizaciones.
+
+## Conexión con el backend
+
+La app consume la API de FastAPI en `http://localhost:8001/api/v1`. Si cambias el puerto o el host, ajusta la configuración de API en el frontend y revisa los permisos de CORS en el backend.
+
+## Estructura útil
+
+- `pages/`: rutas principales de Next.js.
+- `components/`: componentes reutilizables.
+- `hooks/`: lógica compartida de autenticación y cotización.
+- `services/api.ts`: cliente para hablar con la API.
+- `styles/`: estilos globales y por vista.
