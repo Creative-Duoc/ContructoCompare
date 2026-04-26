@@ -17,10 +17,34 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres
 if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
+# Lógica para manejar parámetros incompatibles en asyncpg (como sslmode, channel_binding, etc.)
+connect_args = {}
+if "?" in DATABASE_URL:
+    from urllib.parse import urlparse, parse_qs
+    
+    parsed = urlparse(DATABASE_URL)
+    query = parse_qs(parsed.query)
+    
+    # Si detectamos que se solicita SSL, lo activamos en connect_args
+    ssl_mode = query.get("sslmode", [""])[0]
+    if ssl_mode in ("require", "prefer", "allow") or "sslmode" not in query:
+        # Por defecto, si es una base de datos externa, solemos querer SSL
+        # Si da problemas en local, se puede ajustar
+        if "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL:
+            connect_args["ssl"] = True
+    
+    # Limpiamos COMPLETAMENTE la URL de parámetros para evitar TypeErrors
+    # asyncpg es muy estricto con los argumentos que recibe por URL
+    DATABASE_URL = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+
 SQLALCHEMY_ECHO = os.getenv("SQLALCHEMY_ECHO", "false").lower() in {"1", "true", "yes", "on"}
 
 # 3. Crear el Motor Asíncrono
-engine = create_async_engine(DATABASE_URL, echo=SQLALCHEMY_ECHO)
+engine = create_async_engine(
+    DATABASE_URL, 
+    echo=SQLALCHEMY_ECHO,
+    connect_args=connect_args
+)
 
 # 4. Configurar la Fábrica de Sesiones
 SessionLocal = sessionmaker(
