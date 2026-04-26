@@ -17,15 +17,37 @@ export default function RegisterPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
+    
+    // Validaciones preventivas en Frontend
     if (!nombre || !email || !pass) { setError('Completa todos los campos.'); return; }
-    // HU8-AC1
-    if (pass.length < 8) { setError('La contraseña debe tener al menos 8 caracteres.'); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('El formato del correo no es válido.'); return; }
+    
+    if (pass.length < 8) { 
+      setError('La contraseña debe tener al menos 8 caracteres.'); 
+      return; 
+    }
+    if (!/[a-zA-Z]/.test(pass)) {
+      setError('La contraseña debe incluir al menos una letra.');
+      return;
+    }
+    if (!/\d/.test(pass)) {
+      setError('La contraseña debe incluir al menos un número.');
+      return;
+    }
 
     setLoading(true);
     const res = await register(nombre, email, pass, tipo);
     setLoading(false);
-    if (res.error === 'EMAIL_EXISTS') { setError('Ya existe una cuenta con ese correo.'); return; }
+    
+    if (!res.success) {
+      if (res.error === 'EMAIL_EXISTS') {
+        setError('Ya existe una cuenta con ese correo.');
+      } else {
+        setError(res.error || 'Error al registrar el usuario.');
+      }
+      return;
+    }
+    
     router.push('/?registered=1');
   }
 

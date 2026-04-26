@@ -181,6 +181,9 @@ def setup_logger(name: str, log_file: Path) -> logging.Logger:
     if logger.handlers:
         return logger
 
+    # Crear el directorio si no existe
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 
@@ -260,7 +263,7 @@ class SodimacSprint1Scraper:
 
     def __init__(self) -> None:
         self.root_dir = Path(__file__).resolve().parents[1]
-        self.logger = setup_logger("sodimac_sprint1", self.root_dir / "scrapers/logs/craping_errors.log")
+        self.logger = setup_logger("sodimac_sprint1", self.root_dir / "scrapers/data/logs/craping_errors.log")
         self.robots_guard = RobotsGuard(USER_AGENT, self.logger)
         self.request_timeout_ms = REQUEST_TIMEOUT_MS
 
@@ -547,7 +550,8 @@ class SodimacSprint1Scraper:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run standalone Sprint 1 Sodimac scraper.")
-    parser.add_argument("--queries", nargs="+", default=[])
+    parser.add_argument("--queries", nargs="+", default=[], help="Búsqueda de productos específicos.")
+    parser.add_argument("--search-categories", type=str, default="", help="Lista de categorías separadas por coma (ej: taladro,cemento,fierro).")
     parser.add_argument("--max-products", "--max", dest="max_products", type=int, default=0)
     parser.add_argument(
         "--max-category-urls",
@@ -568,8 +572,14 @@ async def run() -> None:
     args = parse_args()
     scraper = SodimacSprint1Scraper()
 
+    # Combinar queries normales con las categorías de búsqueda por coma
+    search_queries = args.queries
+    if args.search_categories:
+        extra_queries = [q.strip() for q in args.search_categories.split(",") if q.strip()]
+        search_queries.extend(extra_queries)
+
     products = await scraper.scrape(
-        queries=args.queries,
+        queries=search_queries,
         max_products=args.max_products,
         max_category_urls=args.max_category_urls,
         headless=not args.headful,

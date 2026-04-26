@@ -44,11 +44,21 @@
 }
 
 /* Nombre */
+.nameLink {
+  text-decoration: none;
+  display: block;
+}
+
+.nameLink:hover .name {
+  color: var(--blue-mid);
+}
+
 .name {
   font-size: .9rem;
   font-weight: 600;
   color: var(--gray-900);
   line-height: 1.35;
+  transition: color var(--transition);
 }
 
 .brand {

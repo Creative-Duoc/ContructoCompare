@@ -48,24 +48,56 @@ export default function PriceHistoryModal({ producto, onClose }: Props) {
             </div>
           ) : (
             <>
-              {/* Gráfico de barras simple SVG — HU9-AC1 */}
+              {/* Gráfico de línea SVG — HU9-AC1 */}
               <div className={s.chartWrap}>
-                <svg viewBox={`0 0 ${history.length * 60} 120`} className={s.chart}>
+                <svg viewBox={`0 0 ${history.length * 80} 150`} className={s.chart}>
+                  {/* Líneas de fondo (rejilla) */}
+                  <line x1="0" y1="120" x2={history.length * 80} y2="120" stroke="#e1e8f0" strokeWidth="1" strokeDasharray="4" />
+                  <line x1="0" y1="40" x2={history.length * 80} y2="40" stroke="#e1e8f0" strokeWidth="1" strokeDasharray="4" />
+                  
+                  {/* Dibujar la línea de tendencia */}
+                  {(() => {
+                    const points = history.map((h, i) => {
+                      const x = i * 80 + 40;
+                      const y = 120 - ((h.precio - minPrecio) / (maxPrecio - minPrecio || 1)) * 80;
+                      return `${x},${y}`;
+                    }).join(' ');
+                    
+                    return (
+                      <polyline
+                        fill="none"
+                        stroke="#1565C0"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        points={points}
+                      />
+                    );
+                  })()}
+
+                  {/* Dibujar los puntos y etiquetas */}
                   {history.map((h, i) => {
-                    const barH = ((h.precio - minPrecio) / (maxPrecio - minPrecio || 1)) * 80 + 10;
-                    const y = 100 - barH;
+                    const x = i * 80 + 40;
+                    const y = 120 - ((h.precio - minPrecio) / (maxPrecio - minPrecio || 1)) * 80;
                     const color = getTiendaColor(h.tienda);
+                    
                     return (
                       <g key={i}>
-                        <rect x={i * 60 + 10} y={y} width={40} height={barH}
-                          fill={color} rx={4} opacity={.85} />
-                        <text x={i * 60 + 30} y={y - 4} textAnchor="middle"
-                          fontSize="9" fill="#748194" fontFamily="JetBrains Mono,monospace">
-                          ${Math.round(h.precio / 1000)}k
+                        {/* Sombra del punto */}
+                        <circle cx={x} cy={y} r="6" fill={color} opacity="0.2" />
+                        {/* Punto principal */}
+                        <circle cx={x} cy={y} r="4" fill={color} stroke="#fff" strokeWidth="2" />
+                        
+                        {/* Etiqueta de precio */}
+                        <text x={x} y={y - 12} textAnchor="middle"
+                          fontSize="10" fontWeight="700" fill="#2d3748" fontFamily="JetBrains Mono,monospace">
+                          {formatCLP(h.precio)}
                         </text>
-                        <text x={i * 60 + 30} y={114} textAnchor="middle"
-                          fontSize="8" fill="#9BA8BA" fontFamily="sans-serif">
-                          {h.fecha.slice(5)}
+                        
+                        {/* Fecha en el eje X */}
+                        <text x={x} y={145} textAnchor="middle"
+                          fontSize="9" fill="#9BA8BA" fontFamily="sans-serif">
+                          {new Date(h.fecha).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })}
                         </text>
                       </g>
                     );

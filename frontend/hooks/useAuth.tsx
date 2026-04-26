@@ -4,8 +4,8 @@ import { loginUser, registerUser, Usuario } from '../services/api';
 interface AuthCtx {
   user: Usuario | null;
   loading: boolean;
-  login: (email: string, pass: string) => Promise<{ error?: string }>;
-  register: (nombre: string, email: string, pass: string, tipo: string) => Promise<{ error?: string }>;
+  login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  register: (nombre: string, email: string, pass: string, tipo: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
 }
 
@@ -28,15 +28,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (res.success && res.user) {
       setUser(res.user);
       sessionStorage.setItem('cc_user', JSON.stringify(res.user));
-      return {};
+      return { success: true };
     }
-    return { error: res.error };
+    return { success: false, error: res.error };
   }
 
   async function register(nombre: string, email: string, pass: string, tipo: string) {
     const res = await registerUser(nombre, email, pass, tipo);
-    if (res.success) return {};
-    return { error: res.error };
+    if (res.success) return { success: true };
+    return { success: false, error: res.error };
   }
 
   function logout() {

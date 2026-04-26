@@ -25,7 +25,15 @@ export default function ProductCard({ producto, ufValue, showUF, onShowHistory, 
       </div>
 
       <div>
-        <div className={s.name}>{producto.nombre}</div>
+        <a 
+          href={producto.tiendas[0].url_producto} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className={s.nameLink}
+          title="Ver en la tienda oficial"
+        >
+          <div className={s.name}>{producto.nombre}</div>
+        </a>
         <div className={s.brand}>{producto.marca} · Por {producto.unidad}</div>
       </div>
 

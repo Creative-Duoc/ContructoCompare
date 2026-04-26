@@ -24,12 +24,13 @@ export default function AppPage() {
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/');
+    // Búsqueda inicial al cargar
+    if (user) doSearch('', 'Todos');
   }, [user, authLoading]);
 
   useEffect(() => { fetchUF().then(d => setUfValue(d.valor)); }, []);
 
   const doSearch = useCallback(async (q: string, cat: string) => {
-    if (!q.trim()) return;
     setSearching(true); setSearched(false);
     const results = await searchProducts(q, cat);
     setProductos(results);
@@ -39,7 +40,7 @@ export default function AppPage() {
   function handleSearch() { doSearch(query, categoria); }
   function handleCategoryChange(cat: string) {
     setCategoria(cat);
-    if (query) doSearch(query, cat);
+    doSearch(query, cat);
   }
 
   if (authLoading || !user) return null;
