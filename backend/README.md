@@ -1,26 +1,36 @@
-# ⚙️ ConstructoCompare - Backend
+# ConstructoCompare - Backend
 
-El backend de ConstructoCompare es una API REST robusta construida con **FastAPI**. Gestiona la persistencia de datos, la lógica de inventario y la seguridad de los usuarios.
+El backend expone la API REST del proyecto. Aquí viven la autenticación, la persistencia de datos, los modelos de inventario y las rutas que consume el frontend.
 
-## 🚀 Tecnologías Principales
+## Cuándo usarlo
 
-- **Framework:** FastAPI
-- **ORM:** SQLAlchemy 2.0 (Asíncrono)
-- **Base de Datos:** PostgreSQL
-- **Seguridad:** JWT (JSON Web Tokens) con `passlib` y `python-jose`
-- **Validación:** Pydantic 2.x
+- Para levantar la API local y probar endpoints.
+- Para registrar usuarios e iniciar sesión.
+- Para consultar o extender la lógica de inventario y seguridad.
 
-## 🛠️ Configuración y Uso
+## Tecnologías
 
-### 1. Variables de Entorno
+- FastAPI
+- SQLAlchemy 2.0 asíncrono
+- PostgreSQL
+- JWT con `passlib` y `python-jose`
+- Pydantic 2.x
 
-Crea un archivo `.env` en el directorio `backend/` basándote en el archivo `.env.example`:
+## Instalación y configuración
+
+1. Instala las dependencias (desde la raíz con el entorno virtual activo):
 
 ```bash
-cp backend/.env.example backend/.env
+pip install -r requirement.txt
 ```
 
-Configura las siguientes variables:
+2. Crea el archivo de entorno:
+
+```bash
+cp .env.example .env
+```
+
+2. Completa las variables principales:
 
 ```env
 DATABASE_URL=postgresql+asyncpg://usuario:password@localhost:5432/constructo_db
@@ -30,40 +40,44 @@ JWT_ALGORITHM=HS256
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
 ```
 
-### 2. Ejecutar la API
+## Cómo ejecutar
 
-Desde la raíz del proyecto (con el entorno virtual activo):
+Desde la raíz del proyecto, con el entorno virtual activo:
 
 ```bash
 cd backend
 python app/main.py
 ```
 
-O usando uvicorn directamente:
+También puedes usar Uvicorn directamente:
 
 ```bash
 uvicorn app.main:app --reload --port 8001
 ```
 
-### 3. Documentación
+## Cómo probarlo
 
-Una vez iniciada la API, puedes acceder a la documentación interactiva en:
+Una vez iniciado, abre:
 
-- **Swagger UI:** [http://127.0.0.1:8001/docs](http://127.0.0.1:8001/docs)
-- **ReDoc:** [http://127.0.0.1:8001/redoc](http://127.0.0.1:8001/redoc)
+- Swagger UI: http://127.0.0.1:8001/docs
+- ReDoc: http://127.0.0.1:8001/redoc
 
-## 🔐 Flujo de Autenticación
+Endpoints base de usuarios:
 
-La API utiliza seguridad basada en portadores (Bearer tokens):
+- `POST /api/v1/users/register`
+- `POST /api/v1/users/login`
 
-1. **Registro:** `POST /api/v1/users/register`
-2. **Login:** `POST /api/v1/users/login` (retorna un `access_token`)
-3. **Acceso Protegido:** Incluye el header `Authorization: Bearer <tu_token>` en las peticiones a rutas protegidas.
+Para rutas protegidas, envía el header:
 
-## 📂 Estructura del Código
+```http
+Authorization: Bearer <tu_token>
+```
 
-- `app/models/`: Definiciones de tablas de la base de datos.
-- `app/routes/`: Definición de los endpoints de la API.
-- `app/schemas/`: Modelos de validación Pydantic.
-- `app/security.py`: Lógica de hash de contraseñas y gestión de tokens.
-- `app/database.py`: Configuración de la conexión asíncrona a la DB.
+## Estructura
+
+- `app/main.py`: punto de entrada de la API.
+- `app/database.py`: conexión asíncrona a la base de datos.
+- `app/security.py`: hash de contraseñas y JWT.
+- `app/models/`: modelos de base de datos.
+- `app/routes/`: endpoints de la API.
+- `app/schemas/`: validación Pydantic.

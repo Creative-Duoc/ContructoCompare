@@ -54,3 +54,9 @@ tmp/
 dist/
 build/
 *.egg-info/
+
+
+# Scraper specific
+scrapers/data/bronze/
+scrapers/data/silver/
+scrapers/data/gold/

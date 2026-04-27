@@ -3,14 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
 from backend.app.database import get_db
-
-# Importamos los Modelos (Base de datos)
 from backend.app.models.inventory import ProductoMaestro, PrecioRetailer, Categoria, Retailer
-
-# Importamos los Esquemas
-from backend.app.schemas.inventory import PrecioScraperCreate, PrecioResponse, ProductoResponse, ProductoSodimacResponse
-
-NOMBRE_RETAILER_SODIMAC = "Sodimac"
+from backend.app.schemas.inventory import PrecioScraperCreate, PrecioResponse, ProductoGeneralResponse
 
 router = APIRouter(prefix="/api/v1/inventory", tags=["Inventory Engine"])
 
@@ -23,10 +17,7 @@ async def obtener_historial_precios(id_producto: int, db: AsyncSession = Depends
     )
     result = await db.execute(query)
     precios = result.scalars().all()
-    if not precios:
-        # Si no hay precios, devolvemos lista vacía en lugar de 404 para que el frontend no explote
-        return []
-    return precios
+    return precios if precios else []
 
 @router.post("/precios", response_model=PrecioResponse)
 async def registrar_precio_scraper(data: PrecioScraperCreate, db: AsyncSession = Depends(get_db)):
@@ -34,7 +25,7 @@ async def registrar_precio_scraper(data: PrecioScraperCreate, db: AsyncSession =
     producto = result.scalars().first()
     
     if not producto:
-        raise HTTPException(status_code=404, detail=f"El SKU Maestro {data.sku_maestro} no existe en el catálogo.")
+        raise HTTPException(status_code=404, detail=f"El SKU Maestro {data.sku_maestro} no existe.")
 
     nuevo_precio = PrecioRetailer(
         id_producto_maestro=producto.id_producto,
@@ -49,29 +40,17 @@ async def registrar_precio_scraper(data: PrecioScraperCreate, db: AsyncSession =
     await db.refresh(nuevo_precio)
     return nuevo_precio
 
-
-@router.get("/productos", response_model=list[ProductoResponse])
-async def obtener_catalogo_maestro(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(ProductoMaestro))
-    return result.scalars().all()
-
-
-@router.get("/sodimac/productos", response_model=list[ProductoSodimacResponse])
-async def obtener_productos_sodimac(db: AsyncSession = Depends(get_db)):
-    retailer_result = await db.execute(
-        select(Retailer).where(func.lower(Retailer.nombre_retailer) == NOMBRE_RETAILER_SODIMAC.lower())
-    )
-    retailer = retailer_result.scalars().first()
-    if not retailer:
-        raise HTTPException(status_code=404, detail="Retailer Sodimac no encontrado en la base de datos.")
-
+@router.get("/all/productos", response_model=list[ProductoGeneralResponse])
+async def obtener_todos_los_productos(db: AsyncSession = Depends(get_db)):
+    """Retorna el catálogo completo con la última captura de precio por tienda."""
+    
     subq = (
         select(
             PrecioRetailer.id_producto_maestro,
+            PrecioRetailer.id_retailer,
             func.max(PrecioRetailer.fecha_captura).label("ultima_captura"),
         )
-        .where(PrecioRetailer.id_retailer == retailer.id_retailer)
-        .group_by(PrecioRetailer.id_producto_maestro)
+        .group_by(PrecioRetailer.id_producto_maestro, PrecioRetailer.id_retailer)
         .subquery()
     )
 
@@ -81,6 +60,7 @@ async def obtener_productos_sodimac(db: AsyncSession = Depends(get_db)):
             ProductoMaestro.sku_maestro,
             ProductoMaestro.nombre_producto,
             Categoria.nombre_categoria.label("categoria"),
+            Retailer.nombre_retailer.label("retailer"),
             PrecioRetailer.precio_clp,
             PrecioRetailer.disponibilidad,
             PrecioRetailer.link_producto,
@@ -88,15 +68,15 @@ async def obtener_productos_sodimac(db: AsyncSession = Depends(get_db)):
         )
         .join(PrecioRetailer, PrecioRetailer.id_producto_maestro == ProductoMaestro.id_producto)
         .join(Categoria, Categoria.id_categoria == ProductoMaestro.id_categoria)
+        .join(Retailer, Retailer.id_retailer == PrecioRetailer.id_retailer)
         .join(
             subq,
             (subq.c.id_producto_maestro == PrecioRetailer.id_producto_maestro)
+            & (subq.c.id_retailer == PrecioRetailer.id_retailer)
             & (subq.c.ultima_captura == PrecioRetailer.fecha_captura),
         )
-        .where(PrecioRetailer.id_retailer == retailer.id_retailer)
         .order_by(ProductoMaestro.nombre_producto)
     )
 
     result = await db.execute(query)
-    rows = result.mappings().all()
-    return [ProductoSodimacResponse(**row) for row in rows]
+    return result.mappings().all()
