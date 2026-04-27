@@ -28,7 +28,28 @@ export interface Usuario {
   id: string;
   nombre: string;
   email: string;
-  tipo: string;
+  tipo: 'particular' | 'profesional' | 'empresa';
+}
+
+export interface PrecioHistorico {
+  fecha: string;
+  precio: number;
+  tienda: 'Sodimac' | 'Easy' | 'Imperial';
+}
+
+export interface QuoteItem {
+  producto: Producto;
+  tienda_seleccionada: TiendaPrecio;
+  cantidad: number;
+}
+
+export interface Cotizacion {
+  id: string;
+  nombre_proyecto: string;
+  fecha_creacion: string;
+  items: QuoteItem[];
+  total_clp: number;
+  total_uf: number;
 }
 
 export interface UFData {
@@ -151,7 +172,7 @@ export async function searchProducts(query: string, categoria?: string): Promise
   }
 }
 
-export async function loginUser(email: string, pass: string) {
+export async function loginUser(email: string, pass: string): Promise<{ success: boolean; user?: Usuario; error?: string }> {
   try {
     const tokenRes = await apiFetch('/users/login', {
       method: 'POST',
@@ -163,7 +184,13 @@ export async function loginUser(email: string, pass: string) {
       const userRes = await apiFetch('/users/me', {
         headers: { Authorization: `Bearer ${tokenRes.access_token}` },
       });
-      return { success: true, user: { id: userRes.id_usuario, nombre: userRes.nombre_completo, email: userRes.correo_electronico } };
+      const user: Usuario = {
+        id: String(userRes.id_usuario),
+        nombre: userRes.nombre_completo,
+        email: userRes.correo_electronico,
+        tipo: 'particular', // Valor por defecto ya que el backend no lo maneja aún
+      };
+      return { success: true, user };
     }
     return { success: false, error: 'Token no recibido' };
   } catch (error: any) {
@@ -171,15 +198,90 @@ export async function loginUser(email: string, pass: string) {
   }
 }
 
-export async function registerUser(nombre: string, email: string, pass: string) {
+export async function registerUser(nombre: string, email: string, pass: string, tipo: string): Promise<{ success: boolean; error?: string }> {
   try {
     await apiFetch('/users/register', {
       method: 'POST',
-      body: JSON.stringify({ nombre_completo: nombre, correo_electronico: email, password: pass }),
+      body: JSON.stringify({ 
+        nombre_completo: nombre, 
+        correo_electronico: email, 
+        password: pass 
+        // tipo no es aceptado por el backend actual
+      }),
     });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
+}
+
+/**
+ * GET /api/v1/inventory/productos/:id/historial
+ */
+export async function fetchPriceHistory(idProducto: string): Promise<PrecioHistorico[]> {
+  try {
+    const data: any[] = await apiFetch(`/inventory/productos/${idProducto}/historial`);
+    return data.map(item => ({
+      fecha: item.fecha_captura,
+      precio: Number(item.precio_clp),
+      tienda: 'Sodimac' // Por ahora el backend solo maneja Sodimac en el historial
+    }));
+  } catch (error) {
+    console.error('Error fetchPriceHistory:', error);
+    return [];
+  }
+}
+
+/**
+ * Operaciones de Cotizaciones
+ */
+export async function createQuote(quote: Omit<Cotizacion, 'id' | 'fecha_creacion'>): Promise<Cotizacion> {
+  const token = sessionStorage.getItem('cc_token');
+  return apiFetch('/quotes', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(quote),
+  });
+}
+
+export async function fetchQuotes(): Promise<Cotizacion[]> {
+  const token = sessionStorage.getItem('cc_token');
+  return apiFetch('/quotes', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function deleteQuote(id: string): Promise<void> {
+  const token = sessionStorage.getItem('cc_token');
+  await apiFetch(`/quotes/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+/**
+ * Persistencia Local (LocalStorage) — HU7
+ */
+export function saveLocalCotizacion(userEmail: string, cotizacion: Cotizacion) {
+  const key = `cc_quotes_${userEmail}`;
+  const existing = getLocalCotizaciones(userEmail);
+  localStorage.setItem(key, JSON.stringify([cotizacion, ...existing]));
+}
+
+export function getLocalCotizaciones(userEmail: string): Cotizacion[] {
+  const key = `cc_quotes_${userEmail}`;
+  try {
+    const data = localStorage.getItem(key);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function deleteLocalCotizacion(userEmail: string, id: string) {
+  const key = `cc_quotes_${userEmail}`;
+  const existing = getLocalCotizaciones(userEmail);
+  const updated = existing.filter(c => c.id !== id);
+  localStorage.setItem(key, JSON.stringify(updated));
 }
 
