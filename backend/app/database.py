@@ -1,53 +1,50 @@
 import os
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# 1. Cargar variables de entorno (para seguridad de credenciales)
-# Se carga primero desde la raiz del proyecto y luego desde backend/.env (si existe),
-# permitiendo sobreescritura local especifica para el backend.
-BASE_DIR = Path(__file__).resolve().parents[1]  # backend/
+# 1. Cargar variables de entorno
+BASE_DIR = Path(__file__).resolve().parents[1]
 ROOT_DIR = BASE_DIR.parent
 load_dotenv(ROOT_DIR / ".env")
 load_dotenv(BASE_DIR / ".env", override=True)
 
 # 2. Configurar la URL de conexión
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/constructo_db")
 
-if not DATABASE_URL:
-
-    DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/constructo_db"
-
-# Permite usar `postgresql://` en .env sin romper create_async_engine.
+# Asegurar que usamos el driver asíncrono
 if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-
-def normalize_asyncpg_url(url: str) -> str:
-    """Adapta query params estilo libpq para asyncpg."""
-    parts = urlsplit(url)
-    query = dict(parse_qsl(parts.query, keep_blank_values=True))
-
-    if "sslmode" in query and "ssl" not in query:
-        query["ssl"] = query["sslmode"]
-
-    query.pop("sslmode", None)
-    query.pop("channel_binding", None)
-
-    new_query = urlencode(query)
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
-
-
-if DATABASE_URL.startswith("postgresql+asyncpg://"):
-    DATABASE_URL = normalize_asyncpg_url(DATABASE_URL)
+# Lógica para manejar parámetros incompatibles en asyncpg (como sslmode, channel_binding, etc.)
+connect_args = {}
+if "?" in DATABASE_URL:
+    from urllib.parse import urlparse, parse_qs
+    
+    parsed = urlparse(DATABASE_URL)
+    query = parse_qs(parsed.query)
+    
+    # Si detectamos que se solicita SSL, lo activamos en connect_args
+    ssl_mode = query.get("sslmode", [""])[0]
+    if ssl_mode in ("require", "prefer", "allow") or "sslmode" not in query:
+        # Por defecto, si es una base de datos externa, solemos querer SSL
+        # Si da problemas en local, se puede ajustar
+        if "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL:
+            connect_args["ssl"] = True
+    
+    # Limpiamos COMPLETAMENTE la URL de parámetros para evitar TypeErrors
+    # asyncpg es muy estricto con los argumentos que recibe por URL
+    DATABASE_URL = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
 
 SQLALCHEMY_ECHO = os.getenv("SQLALCHEMY_ECHO", "false").lower() in {"1", "true", "yes", "on"}
 
 # 3. Crear el Motor Asíncrono
-# SQLALCHEMY_ECHO=true permite ver las consultas SQL en la terminal
-engine = create_async_engine(DATABASE_URL, echo=SQLALCHEMY_ECHO)
+engine = create_async_engine(
+    DATABASE_URL, 
+    echo=SQLALCHEMY_ECHO,
+    connect_args=connect_args
+)
 
 # 4. Configurar la Fábrica de Sesiones
 SessionLocal = sessionmaker(
@@ -56,12 +53,10 @@ SessionLocal = sessionmaker(
     expire_on_commit=False
 )
 
-# 5. Base para los Modelos (MVC)
-# se hereda en cada modelo para definir las tablas y relaciones
+# 5. Base para los Modelos
 Base = declarative_base()
 
 # 6. Dependencia para FastAPI
-# Esta función abre y cierra la conexión automáticamente en cada petición
 async def get_db():
     async with SessionLocal() as session:
         try:
