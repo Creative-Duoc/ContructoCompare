@@ -5,7 +5,6 @@ from typing import Any
 from urllib.parse import urljoin
 
 from playwright.async_api import Error as PlaywrightError
-from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 
 from core.normalizer import clean_text, normalize_name
@@ -110,23 +109,6 @@ class SodimacScraper(BaseStoreScraper):
 
         return prices
 
-    async def _find_listing_cards(self, page: Any, category_url: str) -> list[Any]:
-        any_card_selector = ", ".join(self.selectors["listing_card"])
-        try:
-            await page.wait_for_selector(any_card_selector, timeout=6_000)
-        except PlaywrightTimeoutError:
-            return []
-
-        for card_selector in self.selectors["listing_card"]:
-            try:
-                cards = await page.query_selector_all(card_selector)
-                if cards:
-                    return cards
-            except PlaywrightError as exc:
-                log_failed_url(self.logger, category_url, f"selector error: {exc}")
-
-        return []
-
     async def scrape(
         self,
         queries: list[str],
@@ -172,7 +154,11 @@ class SodimacScraper(BaseStoreScraper):
                             if not loaded:
                                 continue
 
-                            cards = await self._find_listing_cards(page, category_url)
+                            cards = await self.find_listing_items(
+                                page,
+                                self.selectors["listing_card"],
+                                category_url=category_url,
+                            )
                             if not cards:
                                 log_failed_url(self.logger, category_url, "no cards found")
                                 continue

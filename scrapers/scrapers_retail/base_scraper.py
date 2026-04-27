@@ -16,7 +16,7 @@ from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 
 from core.matching import token_similarity
-from core.normalizer import clean_text, normalize_name
+from core.normalizer import clean_text, normalize_name, normalize_unit_value
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -132,31 +132,6 @@ def log_failed_url(logger: logging.Logger, url: str, reason: str) -> None:
 class BaseStoreScraper:
     store_name = "store"
     base_url = ""
-    UNIT_ALIASES = {
-        "m": "m",
-        "mt": "m",
-        "metro": "m",
-        "metros": "m",
-        "m2": "m2",
-        "m3": "m3",
-        "kg": "kg",
-        "kgs": "kg",
-        "kilo": "kg",
-        "kilos": "kg",
-        "g": "gr",
-        "gr": "gr",
-        "gramo": "gr",
-        "gramos": "gr",
-        "lt": "lt",
-        "lts": "lt",
-        "litro": "lt",
-        "litros": "lt",
-        "ml": "ml",
-        "u": "un",
-        "un": "un",
-        "unidad": "un",
-        "unidades": "un",
-    }
     TRACKING_QUERY_PREFIXES = (
         "utm_",
     )
@@ -215,12 +190,7 @@ class BaseStoreScraper:
 
     @classmethod
     def normalize_unit(cls, raw_unit: str | None) -> str | None:
-        if not raw_unit:
-            return None
-        unit = clean_text(raw_unit).lower()
-        unit = unit.replace("²", "2").replace("³", "3")
-        unit = re.sub(r"[^a-z0-9]", "", unit)
-        return cls.UNIT_ALIASES.get(unit)
+        return normalize_unit_value(raw_unit)
 
     @classmethod
     def extract_unit_price_from_text(cls, text: str) -> tuple[int | None, str | None]:
@@ -352,6 +322,34 @@ class BaseStoreScraper:
             except PlaywrightError:
                 continue
         return ""
+
+    async def find_listing_items(
+        self,
+        page: Page,
+        selectors: Iterable[str],
+        *,
+        category_url: str,
+        wait_timeout_ms: int = 6_000,
+    ) -> list[Any]:
+        selector_list = list(selectors)
+        if not selector_list:
+            return []
+
+        any_selector = ", ".join(selector_list)
+        try:
+            await page.wait_for_selector(any_selector, timeout=wait_timeout_ms)
+        except PlaywrightTimeoutError:
+            return []
+
+        for selector in selector_list:
+            try:
+                elements = await page.query_selector_all(selector)
+                if elements:
+                    return elements
+            except PlaywrightError as exc:
+                log_failed_url(self.logger, category_url, f"selector error: {exc}")
+
+        return []
 
     async def goto_safe(self, page: Page, url: str) -> bool:
         if not self.robots_guard.can_fetch(url):
