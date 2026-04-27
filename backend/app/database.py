@@ -43,7 +43,11 @@ SQLALCHEMY_ECHO = os.getenv("SQLALCHEMY_ECHO", "false").lower() in {"1", "true",
 engine = create_async_engine(
     DATABASE_URL, 
     echo=SQLALCHEMY_ECHO,
-    connect_args=connect_args
+    connect_args=connect_args,
+    pool_recycle=3600,         # Refresca conexiones cada 1 hora
+    pool_pre_ping=True,        # Verifica si la conexión está viva antes de usarla
+    pool_size=5,               # Tamaño base del pool
+    max_overflow=10            # Conexiones extra permitidas en picos de tráfico
 )
 
 # 4. Configurar la Fábrica de Sesiones
