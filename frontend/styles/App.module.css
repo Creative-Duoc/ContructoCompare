@@ -1,0 +1,211 @@
+.page {
+  min-height: 100vh;
+  background: var(--gray-50);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Sección búsqueda */
+.searchSection {
+  background: #fff;
+  border-bottom: 1px solid var(--gray-200);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.searchInner {
+  max-width: var(--max-content);
+  margin: 0 auto;
+}
+
+.searchTitle {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--blue-dark);
+  margin-bottom: 4px;
+}
+
+.searchSub {
+  font-size: .82rem;
+  color: var(--gray-400);
+  margin-bottom: 16px;
+}
+
+.searchBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--gray-50);
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: 8px 8px 8px 16px;
+  transition: var(--transition);
+  margin-bottom: 14px;
+}
+
+.searchBar:focus-within {
+  border-color: var(--blue-light);
+  box-shadow: 0 0 0 3px rgba(59,114,176,.1);
+  background: #fff;
+}
+
+.searchBar svg { color: var(--gray-400); flex-shrink: 0; }
+
+.searchBar input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font-family: var(--font);
+  font-size: .95rem;
+  color: var(--gray-900);
+}
+
+.searchBar input::placeholder { color: var(--gray-400); }
+
+.searchBtn {
+  background: var(--blue-dark);
+  color: #fff;
+  border-radius: var(--radius-md);
+  padding: 0 20px;
+  height: 40px;
+  font-family: var(--font);
+  font-size: .85rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  transition: var(--transition);
+}
+
+.searchBtn:hover { background: var(--blue-mid); }
+
+/* Chips de categoría */
+.chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  font-size: .75rem;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: 100px;
+  border: 1px solid var(--gray-200);
+  color: var(--gray-600);
+  background: #fff;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.chip:hover { border-color: var(--blue-light); color: var(--blue-dark); }
+
+.chipActive {
+  background: var(--blue-dark);
+  color: #fff;
+  border-color: var(--blue-dark);
+}
+
+/* Main content */
+.main {
+  flex: 1;
+  max-width: var(--max-content);
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* Barra de resultados */
+.resultsBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.resultCount {
+  font-size: .85rem;
+  color: var(--gray-600);
+}
+
+.resultCount strong { color: var(--blue-dark); font-family: var(--mono); }
+.resultCount em { color: var(--blue-mid); font-style: normal; }
+
+/* HU6 — Toggle UF */
+.ufToggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: .82rem;
+  color: var(--gray-600);
+  cursor: pointer;
+}
+
+.switchWrap {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  display: inline-block;
+}
+
+.switchWrap input { opacity: 0; width: 0; height: 0; }
+
+.switchSlider {
+  position: absolute;
+  inset: 0;
+  background: var(--gray-300);
+  border-radius: 100px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.switchSlider::before {
+  content: '';
+  position: absolute;
+  height: 16px; width: 16px;
+  left: 3px; bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: var(--transition);
+}
+
+.switchWrap input:checked + .switchSlider { background: var(--blue-dark); }
+.switchWrap input:checked + .switchSlider::before { transform: translateX(18px); }
+
+/* Estados */
+.stateWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 64px 24px;
+  text-align: center;
+  color: var(--gray-400);
+}
+
+.stateWrap h3 { font-size: .95rem; font-weight: 700; color: var(--gray-600); }
+.stateWrap p  { font-size: .85rem; max-width: 360px; }
+
+.spinner {
+  width: 36px; height: 36px;
+  border: 3px solid var(--gray-200);
+  border-top-color: var(--blue-dark);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+
+/* Grid de productos */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .searchSection { padding: 16px; }
+  .main { padding: 16px; }
+  .grid { grid-template-columns: 1fr; }
+  .searchTitle { font-size: 1.15rem; }
+}
