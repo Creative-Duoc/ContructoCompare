@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
-from urllib.parse import parse_qsl, unquote, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, unquote, urlencode, urljoin, urlparse, urlunparse
 from urllib.request import Request, urlopen
 from urllib.robotparser import RobotFileParser
 
@@ -16,7 +16,7 @@ from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 
 from core.matching import token_similarity
-from core.normalizer import clean_text, normalize_name, normalize_unit_value
+from core.normalizer import clean_text, normalize_name
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -42,6 +42,7 @@ class ProductRecord:
     precio_unitario: int | None = None
     unidad_medida: str | None = None
     precio_unitario_fuente: str | None = None
+    image_url: str | None = None
 
 
 class RobotsGuard:
@@ -115,6 +116,21 @@ def setup_logger(name: str, error_log_file: Path) -> logging.Logger:
     file_handler = logging.FileHandler(error_log_file, encoding="utf-8")
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(formatter)
+    
+    class ProgressFilter(logging.Filter):
+        def filter(self, record):
+            msg = record.getMessage()
+            noise_markers = [
+                "CATEGORY_PROGRESS",
+                "SITEMAP_NOT_FOUND",
+                "SITEMAP_RETRY",
+                "Expanded Imperial category tree",
+                "GOTO_RETRY_TIMEOUT",
+                "GOTO_RETRY_ERROR"
+            ]
+            return not any(marker in msg for marker in noise_markers)
+    file_handler.addFilter(ProgressFilter())
+    
     logger.addHandler(file_handler)
 
     stream_handler = logging.StreamHandler()
@@ -132,6 +148,31 @@ def log_failed_url(logger: logging.Logger, url: str, reason: str) -> None:
 class BaseStoreScraper:
     store_name = "store"
     base_url = ""
+    UNIT_ALIASES = {
+        "m": "m",
+        "mt": "m",
+        "metro": "m",
+        "metros": "m",
+        "m2": "m2",
+        "m3": "m3",
+        "kg": "kg",
+        "kgs": "kg",
+        "kilo": "kg",
+        "kilos": "kg",
+        "g": "gr",
+        "gr": "gr",
+        "gramo": "gr",
+        "gramos": "gr",
+        "lt": "lt",
+        "lts": "lt",
+        "litro": "lt",
+        "litros": "lt",
+        "ml": "ml",
+        "u": "un",
+        "un": "un",
+        "unidad": "un",
+        "unidades": "un",
+    }
     TRACKING_QUERY_PREFIXES = (
         "utm_",
     )
@@ -160,6 +201,8 @@ class BaseStoreScraper:
         self.logger = setup_logger(f"constructocompare.{self.store_name}", error_log_file)
         self.robots_guard = RobotsGuard(user_agent=user_agent, logger=self.logger)
         self.category_hints: dict[str, str] = {}
+        self.start_time = time.time()
+        self.total_categories_visited = 0
 
     @staticmethod
     def parse_price(raw: str | int | float | None) -> int | None:
@@ -190,7 +233,12 @@ class BaseStoreScraper:
 
     @classmethod
     def normalize_unit(cls, raw_unit: str | None) -> str | None:
-        return normalize_unit_value(raw_unit)
+        if not raw_unit:
+            return None
+        unit = clean_text(raw_unit).lower()
+        unit = unit.replace("²", "2").replace("³", "3")
+        unit = re.sub(r"[^a-z0-9]", "", unit)
+        return cls.UNIT_ALIASES.get(unit)
 
     @classmethod
     def extract_unit_price_from_text(cls, text: str) -> tuple[int | None, str | None]:
@@ -323,33 +371,38 @@ class BaseStoreScraper:
                 continue
         return ""
 
-    async def find_listing_items(
-        self,
-        page: Page,
-        selectors: Iterable[str],
-        *,
-        category_url: str,
-        wait_timeout_ms: int = 6_000,
-    ) -> list[Any]:
-        selector_list = list(selectors)
-        if not selector_list:
-            return []
-
-        any_selector = ", ".join(selector_list)
-        try:
-            await page.wait_for_selector(any_selector, timeout=wait_timeout_ms)
-        except PlaywrightTimeoutError:
-            return []
-
-        for selector in selector_list:
+    async def extract_image_url(self, container: Any, selectors: Iterable[str]) -> str | None:
+        """Robustly extracts an image URL handling srcset, lazy-loading, and base URL joining."""
+        for selector in selectors:
             try:
-                elements = await page.query_selector_all(selector)
-                if elements:
-                    return elements
-            except PlaywrightError as exc:
-                log_failed_url(self.logger, category_url, f"selector error: {exc}")
+                element = await container.query_selector(selector)
+                if not element:
+                    continue
 
-        return []
+                # 1. Try srcset first (higher res)
+                srcset = await element.get_attribute("srcset")
+                if srcset:
+                    parts = [p.strip() for p in srcset.split(", ") if p.strip()]
+                    if not parts and "," in srcset:
+                        if "http" in srcset and srcset.count("http") == 1:
+                            parts = [srcset.strip()]
+                        else:
+                            parts = [p.strip() for p in srcset.split(",") if p.strip()]
+
+                    if parts:
+                        last_part = parts[-1].split(" ")[0]
+                        if last_part and ("http" in last_part or "/" in last_part):
+                            return urljoin(self.base_url, last_part)
+
+                # 2. Fallback to src or lazy-loading attributes
+                for attr in ["src", "data-src", "data-lazy-src", "data-original"]:
+                    src = await element.get_attribute(attr)
+                    if src and not src.startswith("data:"):
+                        return urljoin(self.base_url, src)
+
+            except PlaywrightError:
+                continue
+        return None
 
     async def goto_safe(self, page: Page, url: str) -> bool:
         if not self.robots_guard.can_fetch(url):
@@ -389,6 +442,7 @@ class BaseStoreScraper:
         return False
 
     def log_category_progress(self, completed: int, total: int, current_url: str) -> None:
+        self.total_categories_visited = max(self.total_categories_visited, completed)
         safe_total = max(1, total)
         safe_completed = min(max(0, completed), safe_total)
         ratio = safe_completed / safe_total
@@ -397,6 +451,7 @@ class BaseStoreScraper:
         filled = min(bar_width, max(0, filled))
         bar = "#" * filled + "-" * (bar_width - filled)
         percent = int(round(ratio * 100))
+        
         self.logger.info(
             "CATEGORY_PROGRESS | store=%s | [%s] %d%% (%d/%d) | current=%s",
             self.store_name,
@@ -405,6 +460,17 @@ class BaseStoreScraper:
             safe_completed,
             safe_total,
             current_url,
+        )
+
+    def log_final_metrics(self, product_count: int, worker_count: int) -> None:
+        duration = time.time() - self.start_time
+        self.logger.info(
+            "SCRAPE_SUMMARY | store=%s | products=%d | categories=%d | workers=%d | duration=%.2fs",
+            self.store_name,
+            product_count,
+            self.total_categories_visited,
+            worker_count,
+            duration
         )
 
     async def scrape(self, queries: list[str], **kwargs: Any) -> list[ProductRecord]:

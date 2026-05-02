@@ -133,37 +133,31 @@ export async function searchProducts(query: string, categoria?: string): Promise
     const productos: Producto[] = data.map(item => ({
       id: String(item.id_producto),
       nombre: item.nombre_producto,
-      marca: item.retailer, 
+      marca: 'Estandarizada', // La marca ahora es canónica en el ProductoMaestro
       categoria: item.categoria,
-      foto_url: '',
+      foto_url: item.foto_url || 'https://via.placeholder.com/200x200?text=Sin+Foto',
       sku: String(item.sku_maestro),
       unidad: 'unidad',
-      tiendas: [{
-          tienda: item.retailer as any,
-          precio_real: Number(item.precio_clp),
+      tiendas: item.tiendas.map((t: any) => ({
+          tienda: t.tienda as any,
+          precio_real: Number(t.precio_clp),
           precio_oferta: null,
-          stock: Boolean(item.disponibilidad),
-          url_producto: item.link_producto,
-          fecha_actualizacion: item.fecha_captura
-      }]
+          stock: Boolean(t.disponibilidad),
+          url_producto: t.link_producto,
+          fecha_actualizacion: new Date(t.fecha_captura).toLocaleDateString()
+      }))
     }));
 
     const q = query.toLowerCase();
     const cat = categoria || 'Todos';
 
     return productos.filter(p => {
-      // 1. Filtro por búsqueda manual (Barra)
       const matchQuery = !q || p.nombre.toLowerCase().includes(q) || p.sku.includes(q);
-      
-      // 2. Filtro por chips (Nombre del Producto)
       let matchChip = cat === 'Todos';
       if (!matchChip) {
-        // Obtenemos la palabra base del chip (ej: "Taladros" -> "taladro", "Pintura" -> "pintur")
-        // Eliminamos la "s" final para capturar plurales y singulares
         const keyword = cat.toLowerCase().replace(/s$/, '').split(' ')[0];
         matchChip = p.nombre.toLowerCase().includes(keyword);
       }
-      
       return matchQuery && matchChip;
     });
   } catch (error) {
@@ -188,7 +182,7 @@ export async function loginUser(email: string, pass: string): Promise<{ success:
         id: String(userRes.id_usuario),
         nombre: userRes.nombre_completo,
         email: userRes.correo_electronico,
-        tipo: 'particular', // Valor por defecto ya que el backend no lo maneja aún
+        tipo: 'particular',
       };
       return { success: true, user };
     }
@@ -206,7 +200,6 @@ export async function registerUser(nombre: string, email: string, pass: string, 
         nombre_completo: nombre, 
         correo_electronico: email, 
         password: pass 
-        // tipo no es aceptado por el backend actual
       }),
     });
     return { success: true };
@@ -215,16 +208,13 @@ export async function registerUser(nombre: string, email: string, pass: string, 
   }
 }
 
-/**
- * GET /api/v1/inventory/productos/:id/historial
- */
 export async function fetchPriceHistory(idProducto: string): Promise<PrecioHistorico[]> {
   try {
     const data: any[] = await apiFetch(`/inventory/productos/${idProducto}/historial`);
     return data.map(item => ({
       fecha: item.fecha_captura,
       precio: Number(item.precio_clp),
-      tienda: 'Sodimac' // Por ahora el backend solo maneja Sodimac en el historial
+      tienda: 'Sodimac'
     }));
   } catch (error) {
     console.error('Error fetchPriceHistory:', error);
@@ -232,9 +222,6 @@ export async function fetchPriceHistory(idProducto: string): Promise<PrecioHisto
   }
 }
 
-/**
- * Operaciones de Cotizaciones
- */
 export async function createQuote(quote: Omit<Cotizacion, 'id' | 'fecha_creacion'>): Promise<Cotizacion> {
   const token = sessionStorage.getItem('cc_token');
   return apiFetch('/quotes', {
@@ -259,9 +246,6 @@ export async function deleteQuote(id: string): Promise<void> {
   });
 }
 
-/**
- * Persistencia Local (LocalStorage) — HU7
- */
 export function saveLocalCotizacion(userEmail: string, cotizacion: Cotizacion) {
   const key = `cc_quotes_${userEmail}`;
   const existing = getLocalCotizaciones(userEmail);
@@ -284,4 +268,3 @@ export function deleteLocalCotizacion(userEmail: string, id: string) {
   const updated = existing.filter(c => c.id !== id);
   localStorage.setItem(key, JSON.stringify(updated));
 }
-

@@ -2,9 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
+from sqlalchemy.orm import selectinload
 from backend.app.database import get_db
 from backend.app.models.inventory import ProductoMaestro, PrecioRetailer, Categoria, Retailer
-from backend.app.schemas.inventory import PrecioScraperCreate, PrecioResponse, ProductoGeneralResponse
+from backend.app.schemas.inventory import (
+    PrecioScraperCreate, 
+    PrecioResponse, 
+    ProductoConsolidadoResponse,
+    TiendaPrecioResponse
+)
 
 router = APIRouter(prefix="/api/v1/inventory", tags=["Inventory Engine"])
 
@@ -40,10 +46,11 @@ async def registrar_precio_scraper(data: PrecioScraperCreate, db: AsyncSession =
     await db.refresh(nuevo_precio)
     return nuevo_precio
 
-@router.get("/all/productos", response_model=list[ProductoGeneralResponse])
+@router.get("/all/productos", response_model=list[ProductoConsolidadoResponse])
 async def obtener_todos_los_productos(db: AsyncSession = Depends(get_db)):
-    """Retorna el catálogo completo con la última captura de precio por tienda."""
+    """Retorna el catálogo completo con la última captura de precio agrupada por producto maestro."""
     
+    # 1. Subconsulta para obtener la última fecha de captura por producto y retailer
     subq = (
         select(
             PrecioRetailer.id_producto_maestro,
@@ -54,20 +61,22 @@ async def obtener_todos_los_productos(db: AsyncSession = Depends(get_db)):
         .subquery()
     )
 
+    # 2. Query principal: Traemos los productos maestros con sus categorías
     query = (
+        select(ProductoMaestro)
+        .options(selectinload(ProductoMaestro.categoria))
+        .order_by(ProductoMaestro.nombre_producto)
+    )
+    
+    result = await db.execute(query)
+    productos_maestros = result.scalars().all()
+
+    # 3. Query para traer todos los precios "últimos" con sus retailers
+    precios_query = (
         select(
-            ProductoMaestro.id_producto,
-            ProductoMaestro.sku_maestro,
-            ProductoMaestro.nombre_producto,
-            Categoria.nombre_categoria.label("categoria"),
-            Retailer.nombre_retailer.label("retailer"),
-            PrecioRetailer.precio_clp,
-            PrecioRetailer.disponibilidad,
-            PrecioRetailer.link_producto,
-            PrecioRetailer.fecha_captura,
+            PrecioRetailer,
+            Retailer.nombre_retailer
         )
-        .join(PrecioRetailer, PrecioRetailer.id_producto_maestro == ProductoMaestro.id_producto)
-        .join(Categoria, Categoria.id_categoria == ProductoMaestro.id_categoria)
         .join(Retailer, Retailer.id_retailer == PrecioRetailer.id_retailer)
         .join(
             subq,
@@ -75,8 +84,40 @@ async def obtener_todos_los_productos(db: AsyncSession = Depends(get_db)):
             & (subq.c.id_retailer == PrecioRetailer.id_retailer)
             & (subq.c.ultima_captura == PrecioRetailer.fecha_captura),
         )
-        .order_by(ProductoMaestro.nombre_producto)
     )
+    
+    precios_result = await db.execute(precios_query)
+    todos_los_precios = precios_result.all()
 
-    result = await db.execute(query)
-    return result.mappings().all()
+    # 4. Agrupamos precios por id_producto_maestro
+    precios_por_producto = {}
+    for p_retail, r_name in todos_los_precios:
+        pid = p_retail.id_producto_maestro
+        if pid not in precios_por_producto:
+            precios_por_producto[pid] = []
+        
+        precios_por_producto[pid].append(TiendaPrecioResponse(
+            tienda=r_name,
+            precio_clp=p_retail.precio_clp,
+            disponibilidad=p_retail.disponibilidad,
+            link_producto=p_retail.link_producto,
+            fecha_captura=p_retail.fecha_captura
+        ))
+
+    # 5. Construimos la respuesta final consolidada
+    respuesta = []
+    for pm in productos_maestros:
+        tiendas = precios_por_producto.get(pm.id_producto, [])
+        if not tiendas:
+            continue # Omitimos productos sin precios
+            
+        respuesta.append(ProductoConsolidadoResponse(
+            id_producto=pm.id_producto,
+            sku_maestro=pm.sku_maestro,
+            nombre_producto=pm.nombre_producto,
+            categoria=pm.categoria.nombre_categoria,
+            foto_url=pm.foto_url,
+            tiendas=tiendas
+        ))
+
+    return respuesta

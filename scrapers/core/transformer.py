@@ -199,6 +199,7 @@ def build_silver_row(
         "precio_unitario": product.get("precio_unitario"),
         "unidad_medida": unidad_medida,
         "precio_unitario_fuente": product.get("precio_unitario_fuente"),
+        "image_url": product.get("image_url"),
         "effective_price": select_effective_price(product),
         "category_normalized": category_normalized,
         "category_source": category_source,

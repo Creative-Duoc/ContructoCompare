@@ -29,6 +29,7 @@ class ProductoMaestro(Base):
     id_producto = Column(Integer, primary_key=True, index=True) # Identificador maestro del producto 
     sku_maestro = Column(Integer, nullable=False, unique=True) # Código interno 
     nombre_producto = Column(String(255), nullable=False) # Nombre genérico estandarizado 
+    foto_url = Column(String, nullable=True) # URL de la imagen del producto
     id_categoria = Column(Integer, ForeignKey("categoria.id_categoria"), nullable=False) # Referencia a CATEGORIA 
     
     categoria = relationship("Categoria", back_populates="productos")

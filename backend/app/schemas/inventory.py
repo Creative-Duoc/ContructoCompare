@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, HttpUrl
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
 
@@ -20,6 +20,8 @@ class PrecioResponse(BaseModel):
     precio_uf: Optional[Decimal]
     disponibilidad: bool
     fecha_captura: datetime
+    retailer_name: Optional[str] = None
+    link_producto: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -34,6 +36,24 @@ class ProductoGeneralResponse(BaseModel):
     disponibilidad: bool
     link_producto: str
     fecha_captura: datetime
+
+    class Config:
+        from_attributes = True
+
+class TiendaPrecioResponse(BaseModel):
+    tienda: str
+    precio_clp: Decimal
+    disponibilidad: bool
+    link_producto: str
+    fecha_captura: datetime
+
+class ProductoConsolidadoResponse(BaseModel):
+    id_producto: int
+    sku_maestro: int
+    nombre_producto: str
+    categoria: str
+    foto_url: Optional[str] = None
+    tiendas: List[TiendaPrecioResponse]
 
     class Config:
         from_attributes = True

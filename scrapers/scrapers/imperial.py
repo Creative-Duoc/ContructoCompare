@@ -10,8 +10,8 @@ from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 
 from core.normalizer import clean_text, normalize_name
-from scrapers_retail.base_scraper import BaseStoreScraper, ProductRecord
-from scrapers_retail.base_scraper import log_failed_url
+from scrapers.base_scraper import BaseStoreScraper, ProductRecord
+from scrapers.base_scraper import log_failed_url
 
 
 class ImperialScraper(BaseStoreScraper):
@@ -33,6 +33,15 @@ class ImperialScraper(BaseStoreScraper):
                 "h1",
                 "[itemprop='name']",
                 ".product-name",
+            ],
+            "listing_image": [
+                "img.osf__sc-1d18s5c-2",
+                "img.osf__sc-p8pmzu-5",
+                "img[src*='/products/']",
+                "img.product-image",
+                ".product-image img",
+                "img[itemprop='image']",
+                "img",
             ],
         }
 
@@ -311,6 +320,8 @@ class ImperialScraper(BaseStoreScraper):
 
         pdp_sku = self._extract_sku_from_text(pdp_text) if pdp_text else ""
         pdp_prices = self.extract_prices_from_text(pdp_text)
+        
+        pdp_img_url = await self.extract_image_url(page, self.selectors["listing_image"])
 
         pdp_brand = ""
         if pdp_text:
@@ -331,6 +342,8 @@ class ImperialScraper(BaseStoreScraper):
             merged["brand"] = pdp_brand
         if pdp_sku:
             merged["sku_store"] = pdp_sku
+        if pdp_img_url:
+            merged["image_url"] = urljoin(self.base_url, pdp_img_url)
 
         for key in [
             "precio_normal",
@@ -524,6 +537,8 @@ class ImperialScraper(BaseStoreScraper):
                                         or self.extract_sku_from_url(product_url)
                                     )
                                     brand = self._extract_brand_from_name(name)
+                                    
+                                    image_url = await self.extract_image_url(link, self.selectors["listing_image"])
 
                                     current: dict[str, Any] = {
                                         "name": name,
@@ -536,6 +551,7 @@ class ImperialScraper(BaseStoreScraper):
                                         "precio_unitario": prices["precio_unitario"],
                                         "unidad_medida": prices["unidad_medida"],
                                         "precio_unitario_fuente": prices["precio_unitario_fuente"],
+                                        "image_url": image_url,
                                     }
 
                                     has_any_price = any(
@@ -552,6 +568,7 @@ class ImperialScraper(BaseStoreScraper):
                                         not current["name"]
                                         or not current["sku_store"]
                                         or not has_any_price
+                                        or not current["image_url"]
                                     )
 
                                     if needs_pdp:
@@ -589,6 +606,7 @@ class ImperialScraper(BaseStoreScraper):
                                         precio_unitario=current["precio_unitario"],
                                         unidad_medida=current["unidad_medida"],
                                         precio_unitario_fuente=current["precio_unitario_fuente"],
+                                        image_url=current["image_url"],
                                     )
 
                                     async with state_lock:
