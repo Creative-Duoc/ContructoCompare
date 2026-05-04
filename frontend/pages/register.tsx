@@ -10,7 +10,7 @@ export default function RegisterPage() {
   const [nombre, setNombre] = useState('');
   const [email, setEmail]   = useState('');
   const [pass, setPass]     = useState('');
-  const [tipo, setTipo]     = useState('profesional');
+  const [tipo, setTipo]     = useState('1'); // 1: Particular por defecto
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -36,7 +36,8 @@ export default function RegisterPage() {
     }
 
     setLoading(true);
-    const res = await register(nombre, email, pass, tipo);
+    // tipo se pasa como número para cumplir con la interfaz del hook y la API
+    const res = await register(nombre, email, pass, Number(tipo));
     setLoading(false);
     
     if (!res.success) {
@@ -121,9 +122,9 @@ export default function RegisterPage() {
                   <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                 </svg>
                 <select value={tipo} onChange={e => setTipo(e.target.value)}>
-                  <option value="particular">Particular</option>
-                  <option value="profesional">Profesional</option>
-                  <option value="empresa">Empresa Constructora</option>
+                  <option value="1">Particular</option>
+                  <option value="2">Profesional</option>
+                  <option value="3">Empresa Constructora</option>
                 </select>
               </div>
             </div>

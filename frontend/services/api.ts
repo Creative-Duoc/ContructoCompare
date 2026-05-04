@@ -28,7 +28,7 @@ export interface Usuario {
   id: string;
   nombre: string;
   email: string;
-  tipo: 'particular' | 'profesional' | 'empresa';
+  id_tipo_usuario: number;
 }
 
 export interface PrecioHistorico {
@@ -98,8 +98,15 @@ async function apiFetch(endpoint: string, options: RequestInit = {}) {
     },
   });
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Error desconocido' }));
-    throw new Error(error.detail || 'Error en la petición');
+    const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
+    
+    // Si el error es un array (errores de validación de Pydantic), lo formateamos
+    if (Array.isArray(errorData.detail)) {
+      const msg = errorData.detail.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ');
+      throw new Error(msg);
+    }
+    
+    throw new Error(errorData.detail || 'Error en la petición');
   }
   return response.json();
 }
@@ -130,38 +137,49 @@ export async function searchProducts(query: string, categoria?: string): Promise
   try {
     const data: any[] = await apiFetch('/inventory/all/productos');
     
-    const productos: Producto[] = data.map(item => ({
-      id: String(item.id_producto),
-      nombre: item.nombre_producto,
-      marca: item.retailer, 
-      categoria: item.categoria,
-      foto_url: '',
-      sku: String(item.sku_maestro),
-      unidad: 'unidad',
-      tiendas: [{
-          tienda: item.retailer as any,
-          precio_real: Number(item.precio_clp),
-          precio_oferta: null,
-          stock: Boolean(item.disponibilidad),
-          url_producto: item.link_producto,
-          fecha_actualizacion: item.fecha_captura
-      }]
-    }));
+    // Agrupar por ID de producto para consolidar múltiples tiendas
+    const grouped = new Map<string, Producto>();
 
+    data.forEach(item => {
+      const id = String(item.id_producto);
+      const tienda: TiendaPrecio = {
+        tienda: item.retailer as any,
+        precio_real: Number(item.precio_clp),
+        precio_oferta: null,
+        stock: Boolean(item.disponibilidad),
+        url_producto: item.link_producto,
+        fecha_actualizacion: new Date(item.fecha_captura).toLocaleDateString('es-CL'),
+      };
+
+      if (grouped.has(id)) {
+        grouped.get(id)!.tiendas.push(tienda);
+      } else {
+        grouped.set(id, {
+          id: id,
+          nombre: item.nombre_producto,
+          marca: item.marca || 'Genérico',
+          categoria: item.categoria,
+          foto_url: item.foto_url || '', 
+          sku: item.sku_tienda ? String(item.sku_tienda) : 'S/N',
+          unidad: item.valor_medida ? `${item.valor_medida} ${item.abreviatura_unidad || ''}` : 'unidad',
+          tiendas: [tienda],
+        });
+      }
+    });
+
+    const productos = Array.from(grouped.values());
     const q = query.toLowerCase();
     const cat = categoria || 'Todos';
 
     return productos.filter(p => {
       // 1. Filtro por búsqueda manual (Barra)
-      const matchQuery = !q || p.nombre.toLowerCase().includes(q) || p.sku.includes(q);
+      const matchQuery = !q || p.nombre.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || p.marca.toLowerCase().includes(q);
       
       // 2. Filtro por chips (Nombre del Producto)
       let matchChip = cat === 'Todos';
       if (!matchChip) {
-        // Obtenemos la palabra base del chip (ej: "Taladros" -> "taladro", "Pintura" -> "pintur")
-        // Eliminamos la "s" final para capturar plurales y singulares
         const keyword = cat.toLowerCase().replace(/s$/, '').split(' ')[0];
-        matchChip = p.nombre.toLowerCase().includes(keyword);
+        matchChip = p.nombre.toLowerCase().includes(keyword) || p.categoria.toLowerCase().includes(keyword);
       }
       
       return matchQuery && matchChip;
@@ -188,7 +206,7 @@ export async function loginUser(email: string, pass: string): Promise<{ success:
         id: String(userRes.id_usuario),
         nombre: userRes.nombre_completo,
         email: userRes.correo_electronico,
-        tipo: 'particular', // Valor por defecto ya que el backend no lo maneja aún
+        id_tipo_usuario: userRes.id_tipo_usuario,
       };
       return { success: true, user };
     }
@@ -198,15 +216,15 @@ export async function loginUser(email: string, pass: string): Promise<{ success:
   }
 }
 
-export async function registerUser(nombre: string, email: string, pass: string, tipo: string): Promise<{ success: boolean; error?: string }> {
+export async function registerUser(nombre: string, email: string, pass: string, idTipoUsuario: number): Promise<{ success: boolean; error?: string }> {
   try {
     await apiFetch('/users/register', {
       method: 'POST',
       body: JSON.stringify({ 
         nombre_completo: nombre, 
         correo_electronico: email, 
-        password: pass 
-        // tipo no es aceptado por el backend actual
+        password: pass,
+        id_tipo_usuario: idTipoUsuario
       }),
     });
     return { success: true };
@@ -284,4 +302,3 @@ export function deleteLocalCotizacion(userEmail: string, id: string) {
   const updated = existing.filter(c => c.id !== id);
   localStorage.setItem(key, JSON.stringify(updated));
 }
-
