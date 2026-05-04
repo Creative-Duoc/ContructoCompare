@@ -125,6 +125,9 @@ export default function RegisterPage() {
                   <option value="1">Particular</option>
                   <option value="2">Profesional</option>
                   <option value="3">Empresa Constructora</option>
+                  <option value="1">Particular</option>
+                  <option value="2">Profesional</option>
+                  <option value="3">Empresa Constructora</option>
                 </select>
               </div>
             </div>
