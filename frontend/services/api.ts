@@ -159,7 +159,7 @@ export async function searchProducts(query: string, categoria?: string): Promise
           nombre: item.nombre_producto,
           marca: item.marca || 'Genérico',
           categoria: item.categoria,
-          foto_url: item.foto_url, // Mapeo directo desde la API
+          foto_url: item.foto_url || '', 
           sku: item.sku_tienda ? String(item.sku_tienda) : 'S/N',
           unidad: item.valor_medida ? `${item.valor_medida} ${item.abreviatura_unidad || ''}` : 'unidad',
           tiendas: [tienda],
