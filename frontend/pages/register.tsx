@@ -18,7 +18,6 @@ export default function RegisterPage() {
     e.preventDefault();
     setError('');
     
-    // Validaciones preventivas en Frontend
     if (!nombre || !email || !pass) { setError('Completa todos los campos.'); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('El formato del correo no es válido.'); return; }
     
@@ -36,7 +35,6 @@ export default function RegisterPage() {
     }
 
     setLoading(true);
-    // tipo se pasa como número para cumplir con la interfaz del hook y la API
     const res = await register(nombre, email, pass, Number(tipo));
     setLoading(false);
     
@@ -122,9 +120,6 @@ export default function RegisterPage() {
                   <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                 </svg>
                 <select value={tipo} onChange={e => setTipo(e.target.value)}>
-                  <option value="1">Particular</option>
-                  <option value="2">Profesional</option>
-                  <option value="3">Empresa Constructora</option>
                   <option value="1">Particular</option>
                   <option value="2">Profesional</option>
                   <option value="3">Empresa Constructora</option>
