@@ -113,6 +113,9 @@ def setup_logger(name: str, error_log_file: Path) -> logging.Logger:
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 
+    # Asegurar que el directorio de logs existe
+    error_log_file.parent.mkdir(parents=True, exist_ok=True)
+
     file_handler = logging.FileHandler(error_log_file, encoding="utf-8")
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(formatter)

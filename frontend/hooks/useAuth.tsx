@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { success: false, error: res.error };
   }
 
-  async function register(nombre: string, email: string, pass: string, tipo: string) {
+  async function register(nombre: string, email: string, pass: string, tipo: number) {
     const res = await registerUser(nombre, email, pass, tipo);
     if (res.success) return { success: true };
     return { success: false, error: res.error };

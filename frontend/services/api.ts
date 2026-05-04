@@ -28,7 +28,7 @@ export interface Usuario {
   id: string;
   nombre: string;
   email: string;
-  tipo: 'particular' | 'profesional' | 'empresa';
+  id_tipo_usuario: number;
 }
 
 export interface PrecioHistorico {
@@ -98,8 +98,15 @@ async function apiFetch(endpoint: string, options: RequestInit = {}) {
     },
   });
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Error desconocido' }));
-    throw new Error(error.detail || 'Error en la petición');
+    const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
+    
+    // Si el error es un array (errores de validación de Pydantic), lo formateamos
+    if (Array.isArray(errorData.detail)) {
+      const msg = errorData.detail.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ');
+      throw new Error(msg);
+    }
+    
+    throw new Error(errorData.detail || 'Error en la petición');
   }
   return response.json();
 }
@@ -130,34 +137,51 @@ export async function searchProducts(query: string, categoria?: string): Promise
   try {
     const data: any[] = await apiFetch('/inventory/all/productos');
     
-    const productos: Producto[] = data.map(item => ({
-      id: String(item.id_producto),
-      nombre: item.nombre_producto,
-      marca: 'Estandarizada', // La marca ahora es canónica en el ProductoMaestro
-      categoria: item.categoria,
-      foto_url: item.foto_url || 'https://via.placeholder.com/200x200?text=Sin+Foto',
-      sku: String(item.sku_maestro),
-      unidad: 'unidad',
-      tiendas: item.tiendas.map((t: any) => ({
-          tienda: t.tienda as any,
-          precio_real: Number(t.precio_clp),
-          precio_oferta: null,
-          stock: Boolean(t.disponibilidad),
-          url_producto: t.link_producto,
-          fecha_actualizacion: new Date(t.fecha_captura).toLocaleDateString()
-      }))
-    }));
+    // Agrupar por ID de producto para consolidar múltiples tiendas
+    const grouped = new Map<string, Producto>();
 
+    data.forEach(item => {
+      const id = String(item.id_producto);
+      const tienda: TiendaPrecio = {
+        tienda: item.retailer as any,
+        precio_real: Number(item.precio_clp),
+        precio_oferta: null,
+        stock: Boolean(item.disponibilidad),
+        url_producto: item.link_producto,
+        fecha_actualizacion: new Date(item.fecha_captura).toLocaleDateString('es-CL'),
+      };
+
+      if (grouped.has(id)) {
+        grouped.get(id)!.tiendas.push(tienda);
+      } else {
+        grouped.set(id, {
+          id: id,
+          nombre: item.nombre_producto,
+          marca: item.marca || 'Genérico',
+          categoria: item.categoria,
+          foto_url: item.foto_url, // Mapeo directo desde la API
+          sku: item.sku_tienda ? String(item.sku_tienda) : 'S/N',
+          unidad: item.valor_medida ? `${item.valor_medida} ${item.abreviatura_unidad || ''}` : 'unidad',
+          tiendas: [tienda],
+        });
+      }
+    });
+
+    const productos = Array.from(grouped.values());
     const q = query.toLowerCase();
     const cat = categoria || 'Todos';
 
     return productos.filter(p => {
-      const matchQuery = !q || p.nombre.toLowerCase().includes(q) || p.sku.includes(q);
+      // 1. Filtro por búsqueda manual (Barra)
+      const matchQuery = !q || p.nombre.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || p.marca.toLowerCase().includes(q);
+      
+      // 2. Filtro por chips (Nombre del Producto)
       let matchChip = cat === 'Todos';
       if (!matchChip) {
         const keyword = cat.toLowerCase().replace(/s$/, '').split(' ')[0];
-        matchChip = p.nombre.toLowerCase().includes(keyword);
+        matchChip = p.nombre.toLowerCase().includes(keyword) || p.categoria.toLowerCase().includes(keyword);
       }
+      
       return matchQuery && matchChip;
     });
   } catch (error) {
@@ -182,7 +206,7 @@ export async function loginUser(email: string, pass: string): Promise<{ success:
         id: String(userRes.id_usuario),
         nombre: userRes.nombre_completo,
         email: userRes.correo_electronico,
-        tipo: 'particular',
+        id_tipo_usuario: userRes.id_tipo_usuario,
       };
       return { success: true, user };
     }
@@ -192,14 +216,15 @@ export async function loginUser(email: string, pass: string): Promise<{ success:
   }
 }
 
-export async function registerUser(nombre: string, email: string, pass: string, tipo: string): Promise<{ success: boolean; error?: string }> {
+export async function registerUser(nombre: string, email: string, pass: string, idTipoUsuario: number): Promise<{ success: boolean; error?: string }> {
   try {
     await apiFetch('/users/register', {
       method: 'POST',
       body: JSON.stringify({ 
         nombre_completo: nombre, 
         correo_electronico: email, 
-        password: pass 
+        password: pass,
+        id_tipo_usuario: idTipoUsuario
       }),
     });
     return { success: true };
@@ -208,13 +233,16 @@ export async function registerUser(nombre: string, email: string, pass: string, 
   }
 }
 
+/**
+ * GET /api/v1/inventory/productos/:id/historial
+ */
 export async function fetchPriceHistory(idProducto: string): Promise<PrecioHistorico[]> {
   try {
     const data: any[] = await apiFetch(`/inventory/productos/${idProducto}/historial`);
     return data.map(item => ({
       fecha: item.fecha_captura,
       precio: Number(item.precio_clp),
-      tienda: 'Sodimac'
+      tienda: 'Sodimac' // Por ahora el backend solo maneja Sodimac en el historial
     }));
   } catch (error) {
     console.error('Error fetchPriceHistory:', error);
@@ -222,6 +250,9 @@ export async function fetchPriceHistory(idProducto: string): Promise<PrecioHisto
   }
 }
 
+/**
+ * Operaciones de Cotizaciones
+ */
 export async function createQuote(quote: Omit<Cotizacion, 'id' | 'fecha_creacion'>): Promise<Cotizacion> {
   const token = sessionStorage.getItem('cc_token');
   return apiFetch('/quotes', {
@@ -246,6 +277,9 @@ export async function deleteQuote(id: string): Promise<void> {
   });
 }
 
+/**
+ * Persistencia Local (LocalStorage) — HU7
+ */
 export function saveLocalCotizacion(userEmail: string, cotizacion: Cotizacion) {
   const key = `cc_quotes_${userEmail}`;
   const existing = getLocalCotizaciones(userEmail);

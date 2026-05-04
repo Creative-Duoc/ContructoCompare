@@ -21,7 +21,8 @@ from sqlalchemy.future import select
 from sqlalchemy import func
 
 from backend.app.database import SessionLocal
-from backend.app.models.inventory import Categoria, PrecioRetailer, ProductoMaestro, Retailer
+from backend.app.models.inventory import Categoria, PrecioRetailer, ProductoMaestro, Retailer, Marca, UnidadMedida
+from core.normalizer import extract_numeric_specs, normalize_unit_value
 
 # Configuración de archivos
 DEFAULT_GOLD_JSON = ROOT_DIR / "scrapers" / "data" / "gold" / "gold_products.json"
@@ -34,10 +35,6 @@ RETAILER_METADATA = {
 
 DEFAULT_CATEGORY = "General"
 
-def _hash_to_int(hash_str: str) -> int:
-    """Convierte un hash hexadecimal corto a un entero positivo para sku_maestro."""
-    return int(hash_str, 16) % (10**9)
-
 async def get_or_create_categoria(session, nombre: str) -> Categoria:
     nombre = nombre or DEFAULT_CATEGORY
     result = await session.execute(select(Categoria).where(Categoria.nombre_categoria == nombre))
@@ -49,6 +46,18 @@ async def get_or_create_categoria(session, nombre: str) -> Categoria:
         print(f"  [+] Categoria creada: {nombre}")
     return categoria
 
+async def get_or_create_marca(session, nombre: str) -> Marca | None:
+    if not nombre or nombre.upper() == "SIN MARCA":
+        return None
+    result = await session.execute(select(Marca).where(Marca.nombre_marca == nombre))
+    marca = result.scalars().first()
+    if not marca:
+        marca = Marca(nombre_marca=nombre)
+        session.add(marca)
+        await session.flush()
+        print(f"  [+] Marca creada: {nombre}")
+    return marca
+
 async def get_or_create_retailer(session, store_key: str) -> Retailer:
     meta = RETAILER_METADATA.get(store_key.lower(), {"name": store_key.capitalize(), "url": "", "logo": ""})
     result = await session.execute(select(Retailer).where(Retailer.nombre_retailer == meta["name"]))
@@ -59,6 +68,12 @@ async def get_or_create_retailer(session, store_key: str) -> Retailer:
         await session.flush()
         print(f"  [+] Retailer creado: {meta['name']}")
     return retailer
+
+async def get_unit_id(session, abreviatura: str | None) -> int | None:
+    if not abreviatura:
+        return None
+    res = await session.execute(select(UnidadMedida.id_unidad).where(UnidadMedida.abreviatura == abreviatura))
+    return res.scalar()
 
 async def load_gold(json_path: Path = DEFAULT_GOLD_JSON) -> None:
     if not json_path.exists():
@@ -76,14 +91,14 @@ async def load_gold(json_path: Path = DEFAULT_GOLD_JSON) -> None:
             # --- 1. PREPARACIÓN Y CACHÉ ---
             retailer_map = {}
             category_map = {}
+            marca_map = {}
             
             print("Cargando caché de productos y precios actuales...")
-            # Caché de productos (SKU_MAESTRO -> ID)
-            res_prod = await session.execute(select(ProductoMaestro.sku_maestro, ProductoMaestro.id_producto))
-            producto_cache = {sku: pid for sku, pid in res_prod.all()}
+            # Caché de productos (NOMBRE, ID_CAT -> ID)
+            res_prod = await session.execute(select(ProductoMaestro.nombre_producto, ProductoMaestro.id_categoria, ProductoMaestro.id_producto))
+            producto_cache = {(name, cat_id): pid for name, cat_id, pid in res_prod.all()}
 
             # Caché de precios (ID_PROD, ID_RETAIL -> PRECIO)
-            # Obtenemos el último precio capturado para cada combinación producto/retailer
             subq = select(
                 PrecioRetailer.id_producto_maestro, PrecioRetailer.id_retailer,
                 func.max(PrecioRetailer.fecha_captura).label("max_fecha")
@@ -96,37 +111,61 @@ async def load_gold(json_path: Path = DEFAULT_GOLD_JSON) -> None:
                             (PrecioRetailer.fecha_captura == subq.c.max_fecha))
             )
             precio_cache = {(r.id_producto_maestro, r.id_retailer): float(r.precio_clp) for r in res_prices.all()}
-            print(f"Caché cargada: {len(producto_cache)} productos maestros y {len(precio_cache)} precios retail.")
+            print(f"Caché cargada: {len(producto_cache)} productos maestros.")
 
             # --- 2. PASADA 1: IDENTIFICAR PRODUCTOS MAESTROS NUEVOS ---
             nuevos_maestros_objs = {}
             
             for gold_entry in gold_products:
-                gold_id_hex = gold_entry.get("gold_product_id")
-                if not gold_id_hex: continue
+                canonical = gold_entry.get("canonical_product", {})
+                nombre = canonical.get("name_canonical")
+                cat_name = canonical.get("category_normalized") or DEFAULT_CATEGORY
+                brand_name = canonical.get("brand_normalized")
                 
-                sku_maestro = _hash_to_int(gold_id_hex)
+                if not nombre: continue
                 
-                if sku_maestro not in producto_cache and sku_maestro not in nuevos_maestros_objs:
-                    canonical = gold_entry.get("canonical_product", {})
-                    cat_name = canonical.get("category_normalized") or DEFAULT_CATEGORY
+                if cat_name not in category_map:
+                    category_map[cat_name] = await get_or_create_categoria(session, cat_name)
+                cat_id = category_map[cat_name].id_categoria
+
+                cache_key = (nombre, cat_id)
+                if cache_key not in producto_cache and cache_key not in nuevos_maestros_objs:
+                    if brand_name not in marca_map:
+                        marca_map[brand_name] = await get_or_create_marca(session, brand_name)
+                    marca = marca_map[brand_name]
                     
-                    if cat_name not in category_map:
-                        category_map[cat_name] = await get_or_create_categoria(session, cat_name)
+                    # --- EXTRAER MEDIDA ---
+                    specs = extract_numeric_specs(nombre)
+                    valor_num = None
+                    id_uni = None
                     
-                    nuevos_maestros_objs[sku_maestro] = ProductoMaestro(
-                        sku_maestro=sku_maestro,
-                        nombre_producto=canonical.get("name_canonical"),
+                    # Intentar peso, luego volumen
+                    if "peso" in specs:
+                        match = re.search(r"(\d+(?:\.\d+)?)", specs["peso"])
+                        if match: 
+                            valor_num = float(match.group(1))
+                            id_uni = await get_unit_id(session, "kg")
+                    elif "volumen" in specs:
+                        match = re.search(r"(\d+(?:\.\d+)?)", specs["volumen"])
+                        if match:
+                            valor_num = float(match.group(1))
+                            id_uni = await get_unit_id(session, "lt")
+
+                    nuevos_maestros_objs[cache_key] = ProductoMaestro(
+                        nombre_producto=nombre,
                         foto_url=canonical.get("image_url"),
-                        id_categoria=category_map[cat_name].id_categoria
+                        id_categoria=cat_id,
+                        id_marca=marca.id_marca if marca else None,
+                        id_unidad=id_uni,
+                        valor_medida=valor_num
                     )
 
             if nuevos_maestros_objs:
                 print(f"Insertando {len(nuevos_maestros_objs)} nuevos productos maestros...")
                 session.add_all(nuevos_maestros_objs.values())
                 await session.flush()
-                for sku, obj in nuevos_maestros_objs.items():
-                    producto_cache[sku] = obj.id_producto
+                for (name, cat_id), obj in nuevos_maestros_objs.items():
+                    producto_cache[(name, cat_id)] = obj.id_producto
 
             # --- 3. PASADA 2: PROCESAR PRECIOS DE CADA RETAILER ---
             precios_a_insertar = []
@@ -134,9 +173,14 @@ async def load_gold(json_path: Path = DEFAULT_GOLD_JSON) -> None:
             unchanged_prices = 0
             
             for gold_entry in gold_products:
-                gold_id_hex = gold_entry.get("gold_product_id")
-                sku_maestro = _hash_to_int(gold_id_hex)
-                id_producto_maestro = producto_cache.get(sku_maestro)
+                canonical = gold_entry.get("canonical_product", {})
+                nombre = canonical.get("name_canonical")
+                cat_name = canonical.get("category_normalized") or DEFAULT_CATEGORY
+                
+                if not nombre: continue
+                
+                cat_id = category_map[cat_name].id_categoria
+                id_producto_maestro = producto_cache.get((nombre, cat_id))
                 
                 if not id_producto_maestro: continue
                 
@@ -144,6 +188,7 @@ async def load_gold(json_path: Path = DEFAULT_GOLD_JSON) -> None:
                 for var in variants:
                     store_key = var.get("store")
                     price = var.get("effective_price")
+                    sku_tienda = var.get("sku_store")
                     
                     if not store_key or price is None: continue
                     
@@ -159,6 +204,7 @@ async def load_gold(json_path: Path = DEFAULT_GOLD_JSON) -> None:
                     precios_a_insertar.append(PrecioRetailer(
                         id_producto_maestro=id_producto_maestro,
                         id_retailer=retailer.id_retailer,
+                        sku_tienda=str(sku_tienda),
                         precio_clp=price,
                         disponibilidad=True,
                         link_producto=var.get("product_url"),
