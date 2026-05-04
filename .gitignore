@@ -60,3 +60,4 @@ build/
 scrapers/data/bronze/
 scrapers/data/silver/
 scrapers/data/gold/
+.aider*

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, Field
 from datetime import datetime
 
 # Lo que recibimos del cliente para crear un nuevo usuario
@@ -6,6 +6,7 @@ class UsuarioCreate(BaseModel):
     nombre_completo: str
     correo_electronico: EmailStr
     password: str
+    id_tipo_usuario: int = Field(..., description="ID del tipo de cuenta (1: Particular, 2: Empresa, etc.)")
 
     @field_validator("password")
     @classmethod
@@ -33,6 +34,7 @@ class UsuarioResponse(BaseModel):
     id_usuario: int
     nombre_completo: str
     correo_electronico: EmailStr
+    id_tipo_usuario: int
     esta_activo: bool
     fecha_registro: datetime
 

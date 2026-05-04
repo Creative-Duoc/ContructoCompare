@@ -61,6 +61,7 @@ async def registrar_usuario(user_data: UsuarioCreate, db: AsyncSession = Depends
         nombre_completo=user_data.nombre_completo,
         correo_electronico=user_data.correo_electronico,
         password_hash=get_password_hash(user_data.password),
+        id_tipo_usuario=user_data.id_tipo_usuario,
     )
 
     db.add(nuevo_usuario)
