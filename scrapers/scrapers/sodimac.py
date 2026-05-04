@@ -5,10 +5,11 @@ from typing import Any
 from urllib.parse import urljoin
 
 from playwright.async_api import Error as PlaywrightError
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 
 from core.normalizer import clean_text, normalize_name
-from scrapers_retail.base_scraper import BaseStoreScraper, ProductRecord, log_failed_url
+from scrapers.base_scraper import BaseStoreScraper, ProductRecord, log_failed_url
 
 
 class SodimacScraper(BaseStoreScraper):
@@ -38,6 +39,14 @@ class SodimacScraper(BaseStoreScraper):
             "listing_url": [
                 "a.pod-link",
                 "a[href*='/articulo/']",
+            ],
+            "listing_image": [
+                "img[id*='pod-image']",
+                "div[data-testid='image'] img",
+                "img[data-testid='image']",
+                "picture img",
+                ".pod-image img",
+                "img",
             ],
         }
 
@@ -109,6 +118,23 @@ class SodimacScraper(BaseStoreScraper):
 
         return prices
 
+    async def _find_listing_cards(self, page: Any, category_url: str) -> list[Any]:
+        any_card_selector = ", ".join(self.selectors["listing_card"])
+        try:
+            await page.wait_for_selector(any_card_selector, timeout=6_000)
+        except PlaywrightTimeoutError:
+            return []
+
+        for card_selector in self.selectors["listing_card"]:
+            try:
+                cards = await page.query_selector_all(card_selector)
+                if cards:
+                    return cards
+            except PlaywrightError as exc:
+                log_failed_url(self.logger, category_url, f"selector error: {exc}")
+
+        return []
+
     async def scrape(
         self,
         queries: list[str],
@@ -154,11 +180,7 @@ class SodimacScraper(BaseStoreScraper):
                             if not loaded:
                                 continue
 
-                            cards = await self.find_listing_items(
-                                page,
-                                self.selectors["listing_card"],
-                                category_url=category_url,
-                            )
+                            cards = await self._find_listing_cards(page, category_url)
                             if not cards:
                                 log_failed_url(self.logger, category_url, "no cards found")
                                 continue
@@ -172,7 +194,7 @@ class SodimacScraper(BaseStoreScraper):
                                 cards = refreshed_cards
 
                             for card in cards:
-                                if stop_scraping.is_set():
+                                if stop_scraping.is_set() or page.is_closed():
                                     break
                                 try:
                                     name = await self.first_text(card, self.selectors["listing_name"])
@@ -192,6 +214,9 @@ class SodimacScraper(BaseStoreScraper):
                                         continue
 
                                     brand = await self.first_text(card, self.selectors["listing_brand"])
+                                    
+                                    image_url = await self.extract_image_url(card, self.selectors["listing_image"])
+
                                     category_hint_url = self.canonicalize_url(category_url, drop_all_query=True)
                                     record = ProductRecord(
                                         store=self.store_name,
@@ -206,6 +231,7 @@ class SodimacScraper(BaseStoreScraper):
                                         precio_unitario=prices["precio_unitario"],
                                         unidad_medida=prices["unidad_medida"],
                                         precio_unitario_fuente=prices["precio_unitario_fuente"],
+                                        image_url=image_url,
                                     )
 
                                     async with state_lock:
