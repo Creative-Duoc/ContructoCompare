@@ -100,7 +100,6 @@ async function apiFetch(endpoint: string, options: RequestInit = {}) {
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
     
-    // Si el error es un array (errores de validación de Pydantic), lo formateamos
     if (Array.isArray(errorData.detail)) {
       const msg = errorData.detail.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ');
       throw new Error(msg);
@@ -137,7 +136,6 @@ export async function searchProducts(query: string, categoria?: string): Promise
   try {
     const data: any[] = await apiFetch('/inventory/all/productos');
     
-    // Agrupar por ID de producto para consolidar múltiples tiendas
     const grouped = new Map<string, Producto>();
 
     data.forEach(item => {
@@ -172,16 +170,12 @@ export async function searchProducts(query: string, categoria?: string): Promise
     const cat = categoria || 'Todos';
 
     return productos.filter(p => {
-      // 1. Filtro por búsqueda manual (Barra)
       const matchQuery = !q || p.nombre.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || p.marca.toLowerCase().includes(q);
-      
-      // 2. Filtro por chips (Nombre del Producto)
       let matchChip = cat === 'Todos';
       if (!matchChip) {
         const keyword = cat.toLowerCase().replace(/s$/, '').split(' ')[0];
         matchChip = p.nombre.toLowerCase().includes(keyword) || p.categoria.toLowerCase().includes(keyword);
       }
-      
       return matchQuery && matchChip;
     });
   } catch (error) {
@@ -233,16 +227,13 @@ export async function registerUser(nombre: string, email: string, pass: string, 
   }
 }
 
-/**
- * GET /api/v1/inventory/productos/:id/historial
- */
 export async function fetchPriceHistory(idProducto: string): Promise<PrecioHistorico[]> {
   try {
     const data: any[] = await apiFetch(`/inventory/productos/${idProducto}/historial`);
     return data.map(item => ({
       fecha: item.fecha_captura,
       precio: Number(item.precio_clp),
-      tienda: 'Sodimac' // Por ahora el backend solo maneja Sodimac en el historial
+      tienda: 'Sodimac' 
     }));
   } catch (error) {
     console.error('Error fetchPriceHistory:', error);
@@ -250,9 +241,6 @@ export async function fetchPriceHistory(idProducto: string): Promise<PrecioHisto
   }
 }
 
-/**
- * Operaciones de Cotizaciones
- */
 export async function createQuote(quote: Omit<Cotizacion, 'id' | 'fecha_creacion'>): Promise<Cotizacion> {
   const token = sessionStorage.getItem('cc_token');
   return apiFetch('/quotes', {
@@ -277,9 +265,6 @@ export async function deleteQuote(id: string): Promise<void> {
   });
 }
 
-/**
- * Persistencia Local (LocalStorage) — HU7
- */
 export function saveLocalCotizacion(userEmail: string, cotizacion: Cotizacion) {
   const key = `cc_quotes_${userEmail}`;
   const existing = getLocalCotizaciones(userEmail);
