@@ -6,10 +6,11 @@ from typing import Any
 from urllib.parse import urljoin, urlparse, urlunparse
 
 from playwright.async_api import Error as PlaywrightError
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 
 from core.normalizer import clean_text, normalize_name
-from scrapers_retail.base_scraper import BaseStoreScraper, ProductRecord, log_failed_url
+from scrapers.base_scraper import BaseStoreScraper, ProductRecord, log_failed_url
 
 
 
@@ -38,6 +39,12 @@ class EasyScraper(BaseStoreScraper):
             ],
             "listing_url": [
                 "a[href$='/p']",
+            ],
+            "listing_image": [
+                "img[data-nimg]",
+                "img[alt][src*='/arquivos/ids/']",
+                "img[data-id^='product-image-']",
+                "img",
             ],
         }
 
@@ -190,6 +197,23 @@ class EasyScraper(BaseStoreScraper):
                 return cleaned
 
         return ""
+
+    async def _find_listing_cards(self, page: Any, category_url: str) -> list[Any]:
+        any_card_selector = ", ".join(self.selectors["listing_card"])
+        try:
+            await page.wait_for_selector(any_card_selector, timeout=6_000)
+        except PlaywrightTimeoutError:
+            return []
+
+        for card_selector in self.selectors["listing_card"]:
+            try:
+                cards = await page.query_selector_all(card_selector)
+                if cards:
+                    return cards
+            except PlaywrightError as exc:
+                log_failed_url(self.logger, category_url, f"selector error: {exc}")
+
+        return []
 
     async def extract_prices(self, card: Any) -> dict[str, int | str | None]:
         prices: dict[str, int | str | None] = {
@@ -418,11 +442,7 @@ class EasyScraper(BaseStoreScraper):
                             if not loaded:
                                 continue
 
-                            cards = await self.find_listing_items(
-                                page,
-                                self.selectors["listing_card"],
-                                category_url=category_url,
-                            )
+                            cards = await self._find_listing_cards(page, category_url)
                             if not cards:
                                 try:
                                     await page.wait_for_load_state("networkidle", timeout=8_000)
@@ -480,6 +500,9 @@ class EasyScraper(BaseStoreScraper):
                                         continue
 
                                     brand = await self.first_text(card, self.selectors["listing_brand"])
+                                    
+                                    image_url = await self.extract_image_url(card, self.selectors["listing_image"])
+
                                     category_hint_url = self.canonicalize_url(category_url, drop_all_query=True)
                                     record = ProductRecord(
                                         store=self.store_name,
@@ -494,6 +517,7 @@ class EasyScraper(BaseStoreScraper):
                                         precio_unitario=prices["precio_unitario"],
                                         unidad_medida=prices["unidad_medida"],
                                         precio_unitario_fuente=prices["precio_unitario_fuente"],
+                                        image_url=image_url,
                                     )
 
                                     async with state_lock:
