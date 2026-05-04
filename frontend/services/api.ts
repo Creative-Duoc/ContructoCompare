@@ -29,7 +29,6 @@ export interface Usuario {
   nombre: string;
   email: string;
   id_tipo_usuario: number;
-  id_tipo_usuario: number;
 }
 
 export interface PrecioHistorico {
@@ -108,15 +107,6 @@ async function apiFetch(endpoint: string, options: RequestInit = {}) {
     }
     
     throw new Error(errorData.detail || 'Error en la petición');
-    const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
-    
-    // Si el error es un array (errores de validación de Pydantic), lo formateamos
-    if (Array.isArray(errorData.detail)) {
-      const msg = errorData.detail.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ');
-      throw new Error(msg);
-    }
-    
-    throw new Error(errorData.detail || 'Error en la petición');
   }
   return response.json();
 }
@@ -184,13 +174,11 @@ export async function searchProducts(query: string, categoria?: string): Promise
     return productos.filter(p => {
       // 1. Filtro por búsqueda manual (Barra)
       const matchQuery = !q || p.nombre.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || p.marca.toLowerCase().includes(q);
-      const matchQuery = !q || p.nombre.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || p.marca.toLowerCase().includes(q);
       
       // 2. Filtro por chips (Nombre del Producto)
       let matchChip = cat === 'Todos';
       if (!matchChip) {
         const keyword = cat.toLowerCase().replace(/s$/, '').split(' ')[0];
-        matchChip = p.nombre.toLowerCase().includes(keyword) || p.categoria.toLowerCase().includes(keyword);
         matchChip = p.nombre.toLowerCase().includes(keyword) || p.categoria.toLowerCase().includes(keyword);
       }
       
@@ -219,7 +207,6 @@ export async function loginUser(email: string, pass: string): Promise<{ success:
         nombre: userRes.nombre_completo,
         email: userRes.correo_electronico,
         id_tipo_usuario: userRes.id_tipo_usuario,
-        id_tipo_usuario: userRes.id_tipo_usuario,
       };
       return { success: true, user };
     }
@@ -230,15 +217,12 @@ export async function loginUser(email: string, pass: string): Promise<{ success:
 }
 
 export async function registerUser(nombre: string, email: string, pass: string, idTipoUsuario: number): Promise<{ success: boolean; error?: string }> {
-export async function registerUser(nombre: string, email: string, pass: string, idTipoUsuario: number): Promise<{ success: boolean; error?: string }> {
   try {
     await apiFetch('/users/register', {
       method: 'POST',
       body: JSON.stringify({ 
         nombre_completo: nombre, 
         correo_electronico: email, 
-        password: pass,
-        id_tipo_usuario: idTipoUsuario
         password: pass,
         id_tipo_usuario: idTipoUsuario
       }),
