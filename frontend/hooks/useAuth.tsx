@@ -5,7 +5,7 @@ interface AuthCtx {
   user: Usuario | null;
   loading: boolean;
   login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
-  register: (nombre: string, email: string, pass: string, tipo: string) => Promise<{ success: boolean; error?: string }>;
+  register: (nombre: string, email: string, pass: string, tipo: number) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
 }
 

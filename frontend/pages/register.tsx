@@ -10,7 +10,7 @@ export default function RegisterPage() {
   const [nombre, setNombre] = useState('');
   const [email, setEmail]   = useState('');
   const [pass, setPass]     = useState('');
-  const [tipo, setTipo]     = useState('1');
+  const [tipo, setTipo]     = useState('1'); // 1: Particular por defecto
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -18,7 +18,6 @@ export default function RegisterPage() {
     e.preventDefault();
     setError('');
     
-    // Validaciones preventivas en Frontend
     if (!nombre || !email || !pass) { setError('Completa todos los campos.'); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('El formato del correo no es válido.'); return; }
     
