@@ -12,15 +12,6 @@ class PrecioScraperCreate(BaseModel):
     link_producto: HttpUrl = Field(..., description="URL directa para redireccionamiento")
 
 # --- Esquemas de Respuesta para el Frontend 
-class ProductoResponse(BaseModel):
-    id_producto: int
-    sku_maestro: int
-    nombre_producto: str
-    id_categoria: int
-
-    class Config:
-        from_attributes = True
-
 class PrecioResponse(BaseModel):
     id_precio: int
     id_producto_maestro: int
@@ -33,11 +24,12 @@ class PrecioResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class ProductoSodimacResponse(BaseModel):
+class ProductoGeneralResponse(BaseModel):
     id_producto: int
     sku_maestro: int
     nombre_producto: str
     categoria: str
+    retailer: str
     precio_clp: Decimal
     disponibilidad: bool
     link_producto: str
