@@ -54,3 +54,4 @@ tmp/
 dist/
 build/
 *.egg-info/
+*aider*
