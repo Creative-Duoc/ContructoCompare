@@ -5,7 +5,7 @@ interface AuthCtx {
   user: Usuario | null;
   loading: boolean;
   login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
-  register: (nombre: string, email: string, pass: string, tipo: string) => Promise<{ success: boolean; error?: string }>;
+  register: (nombre: string, email: string, pass: string, tipo: number) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
 }
 
@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { success: false, error: res.error };
   }
 
-  async function register(nombre: string, email: string, pass: string, tipo: string) {
+  async function register(nombre: string, email: string, pass: string, tipo: number) {
     const res = await registerUser(nombre, email, pass, tipo);
     if (res.success) return { success: true };
     return { success: false, error: res.error };

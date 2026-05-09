@@ -11,8 +11,10 @@ if __package__ in {None, ""}:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.app.database import Base, engine
+from backend.app.database import Base, engine, SessionLocal
 from backend.app.routes import inventory, users
+from backend.app.models.users import TipoUsuario
+from backend.app.models.inventory import Retailer, UnidadMedida
 
 app = FastAPI(title="ConstructoCompare - Inventory Service")
 AUTO_CREATE_TABLES = os.getenv("AUTO_CREATE_TABLES", "true").lower() in {"1", "true", "yes", "on"}
@@ -33,11 +35,45 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+async def seed_data():
+    """Puebla automáticamente las tablas maestras (Tipos de Cuenta, Retailers y Unidades)."""
+    async with SessionLocal() as session:
+        async with session.begin():
+            # 1. Tipos de Usuario
+            tipos = [
+                TipoUsuario(id_tipo=1, nombre_tipo="Particular", descripcion="Persona natural"),
+                TipoUsuario(id_tipo=2, nombre_tipo="Profesional", descripcion="Maestro o contratista independiente"),
+                TipoUsuario(id_tipo=3, nombre_tipo="Empresa", descripcion="Empresa constructora o Pyme"),
+            ]
+            for t in tipos:
+                await session.merge(t)
+
+            # 2. Retailers
+            retailers = [
+                Retailer(id_retailer=1, nombre_retailer="Sodimac", url_base="https://www.sodimac.cl", logo_path="logos/sodimac.png"),
+                Retailer(id_retailer=2, nombre_retailer="Easy", url_base="https://www.easy.cl", logo_path="logos/easy.png"),
+                Retailer(id_retailer=3, nombre_retailer="Imperial", url_base="https://www.imperial.cl", logo_path="logos/imperial.png"),
+            ]
+            for r in retailers:
+                await session.merge(r)
+
+            # 3. Unidades de Medida
+            unidades = [
+                UnidadMedida(id_unidad=1, nombre_unidad="Kilogramo", abreviatura="kg", tipo_magnitud="Masa"),
+                UnidadMedida(id_unidad=2, nombre_unidad="Metro", abreviatura="m", tipo_magnitud="Longitud"),
+                UnidadMedida(id_unidad=3, nombre_unidad="Litro", abreviatura="lt", tipo_magnitud="Volumen"),
+                UnidadMedida(id_unidad=4, nombre_unidad="Unidad", abreviatura="un", tipo_magnitud="Conteo"),
+                UnidadMedida(id_unidad=5, nombre_unidad="Metro Cuadrado", abreviatura="m2", tipo_magnitud="Superficie"),
+            ]
+            for u in unidades:
+                await session.merge(u)
+
 
 @app.on_event("startup")
 async def startup():
     if AUTO_CREATE_TABLES:
         await init_db()
+        await seed_data()
 
 
 app.include_router(inventory.router)
