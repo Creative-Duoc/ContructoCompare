@@ -2,57 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
-from sqlalchemy.orm import selectinload
-from backend.app.database import get_db
-from backend.app.models.inventory import ProductoMaestro, PrecioRetailer, Categoria, Retailer, Marca, UnidadMedida, Cotizacion, DetalleCotizacion
-from backend.app.schemas.inventory import (
+from backend.inventory.database import get_db
+from backend.inventory.models.inventory import ProductoMaestro, PrecioRetailer, Categoria, Retailer, Marca, UnidadMedida
+from backend.inventory.schemas.inventory import (
     PrecioScraperCreate, 
     PrecioResponse, 
     ProductoGeneralResponse,
-    CotizacionCreate,
-    CotizacionResponse
 )
-from backend.app.routes.users import get_current_user
-from backend.app.models.users import Usuario
 
 router = APIRouter(prefix="/api/v1/inventory", tags=["Inventory Engine"])
-
-# --- Endpoints de Cotizaciones ---
-
-@router.post("/cotizaciones", response_model=CotizacionResponse)
-async def crear_cotizacion(
-    data: CotizacionCreate, 
-    db: AsyncSession = Depends(get_db),
-    usuario_actual: Usuario = Depends(get_current_user)
-):
-    nueva_cotizacion = Cotizacion(
-        id_usuario=usuario_actual.id_usuario,
-        nombre_proyecto=data.nombre_proyecto
-    )
-    db.add(nueva_cotizacion)
-    await db.flush() # Para obtener id_cotizacion
-
-    for det in data.detalles:
-        nuevo_detalle = DetalleCotizacion(
-            id_cotizacion=nueva_cotizacion.id_cotizacion,
-            id_producto_maestro=det.id_producto_maestro,
-            id_retailer=det.id_retailer,
-            cantidad=det.cantidad
-        )
-        db.add(nuevo_detalle)
-    
-    await db.commit()
-    await db.refresh(nueva_cotizacion)
-    return nueva_cotizacion
-
-@router.get("/cotizaciones", response_model=list[CotizacionResponse])
-async def listar_mis_cotizaciones(
-    db: AsyncSession = Depends(get_db),
-    usuario_actual: Usuario = Depends(get_current_user)
-):
-    query = select(Cotizacion).where(Cotizacion.id_usuario == usuario_actual.id_usuario).options(selectinload(Cotizacion.detalles))
-    result = await db.execute(query)
-    return result.scalars().all()
 
 # --- Endpoints de Productos ---
 

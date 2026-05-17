@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
-import { QuoteItem, Producto, TiendaPrecio, getPrecioFinal, saveLocalCotizacion } from '../services/api';
+import { QuoteItem, Producto, TiendaPrecio, getPrecioFinal, createQuote } from '../services/api';
 
 interface QuoteCtx {
   items: QuoteItem[];
@@ -7,8 +7,9 @@ interface QuoteCtx {
   removeItem: (idx: number) => void;
   updateQty: (idx: number, delta: number) => void;
   clearQuote: () => void;
+  setItems: (items: QuoteItem[]) => void;
   totalCLP: number;
-  saveQuote: (nombre: string, userEmail: string, ufValue: number) => void;
+  saveQuote: (nombre: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const QuoteContext = createContext<QuoteCtx>({} as QuoteCtx);
@@ -47,23 +48,24 @@ export function QuoteProvider({ children }: { children: ReactNode }) {
 
   function clearQuote() { setItems([]); }
 
+  function setItemsFromQuote(nextItems: QuoteItem[]) {
+    setItems(nextItems);
+  }
+
   const totalCLP = items.reduce((s, i) => s + getPrecioFinal(i.tienda_seleccionada) * i.cantidad, 0);
 
-  // HU7: guardar cotización en localStorage
-  function saveQuote(nombre: string, userEmail: string, ufValue: number) {
-    saveLocalCotizacion(userEmail, {
-      id: 'COT-' + Date.now(),
-      nombre_proyecto: nombre,
-      fecha_creacion: new Date().toLocaleDateString('es-CL'),
-      items,
-      total_clp: totalCLP,
-      total_uf: parseFloat((totalCLP / ufValue).toFixed(4)),
-    });
-    clearQuote();
+  async function saveQuote(nombre: string) {
+    try {
+      await createQuote(nombre, items);
+      clearQuote();
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
   }
 
   return (
-    <QuoteContext.Provider value={{ items, addItem, removeItem, updateQty, clearQuote, totalCLP, saveQuote }}>
+    <QuoteContext.Provider value={{ items, addItem, removeItem, updateQty, clearQuote, setItems: setItemsFromQuote, totalCLP, saveQuote }}>
       {children}
     </QuoteContext.Provider>
   );

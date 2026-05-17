@@ -75,6 +75,12 @@ class CotizacionCreate(BaseModel):
     nombre_proyecto: str
     detalles: List[DetalleCotizacionCreate]
 
+
+class CotizacionUpdate(BaseModel):
+    nombre_proyecto: Optional[str] = None
+    estado: Optional[str] = None
+    detalles: Optional[List[DetalleCotizacionCreate]] = None
+
 class CotizacionResponse(BaseModel):
     id_cotizacion: int
     id_usuario: int
@@ -83,8 +89,6 @@ class CotizacionResponse(BaseModel):
     estado: str
     detalles: List[DetalleCotizacionResponse]
 
-    class Config:
-        from_attributes = True
     class Config:
         from_attributes = True
 

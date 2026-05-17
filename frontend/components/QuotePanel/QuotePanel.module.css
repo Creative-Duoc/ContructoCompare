@@ -48,6 +48,87 @@
 
 .closeBtn:hover { background: var(--gray-100); color: var(--gray-900); }
 
+.savedSection {
+  border-bottom: 1px solid var(--gray-200);
+  padding: 10px 20px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.savedToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--blue-dark);
+}
+
+.savedChevron { color: var(--gray-400); font-size: .85rem; }
+
+.savedPanel {
+  display: grid;
+  gap: 8px;
+  background: #fff;
+}
+
+.savedActions {
+  display: flex;
+  gap: 8px;
+}
+
+.newQuoteBtn,
+.refreshBtn {
+  flex: 1;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: .75rem;
+  color: var(--gray-600);
+  transition: var(--transition);
+}
+
+.newQuoteBtn { background: var(--blue-pale); color: var(--blue-dark); border-color: rgba(59,114,176,.25); }
+.newQuoteBtn:hover { background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); }
+.refreshBtn:hover { border-color: var(--gray-400); color: var(--gray-800); }
+
+.savedRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--gray-200);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--gray-50);
+  font-size: .78rem;
+}
+
+.savedRow strong { display: block; font-size: .8rem; color: var(--blue-dark); }
+.savedRow span { font-size: .72rem; color: var(--gray-500); }
+
+.loadBtn {
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: .72rem;
+  color: var(--gray-600);
+  transition: var(--transition);
+}
+
+.loadBtn:hover { border-color: var(--blue-light); color: var(--blue-dark); }
+
+.savedEmpty {
+  padding: 6px 4px;
+  font-size: .76rem;
+  color: var(--gray-400);
+}
+
+.activeHint {
+  font-size: .72rem;
+  color: var(--blue-mid);
+}
+
 /* Items list */
 .items {
   flex: 1;
@@ -93,12 +174,30 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.itemName:hover {
+  color: var(--blue-dark);
+  text-decoration: underline;
 }
 
 .itemStore {
   font-size: .72rem;
   font-weight: 600;
   margin-top: 2px;
+}
+
+.itemSelect {
+  margin-top: 6px;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: .75rem;
+  color: var(--gray-700);
+  background: #fff;
+  max-width: 160px;
 }
 
 .itemSubtotal {

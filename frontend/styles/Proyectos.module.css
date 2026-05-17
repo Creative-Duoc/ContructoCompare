@@ -67,9 +67,126 @@
 }
 
 .cardActions { display: flex; justify-content: flex-end; }
+.editBtn {
+  font-size: .78rem; color: var(--blue-dark);
+  border: 1px solid rgba(59,114,176,.2);
+  background: var(--blue-pale);
+  border-radius: 8px; padding: 5px 12px;
+  transition: var(--transition);
+  margin-right: 8px;
+}
+.editBtn:hover { background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); }
 .deleteBtn {
   font-size: .78rem; color: var(--gray-400);
   border: 1px solid var(--gray-200); border-radius: 8px; padding: 5px 12px;
   transition: var(--transition);
 }
 .deleteBtn:hover { border-color: var(--red); color: var(--red); }
+
+.detailsPanel {
+  border-top: 1px solid var(--gray-200);
+  padding-top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.detailHeader label {
+  display: grid;
+  gap: 6px;
+  font-size: .78rem;
+  color: var(--gray-500);
+}
+
+.detailInput {
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: .85rem;
+}
+
+.detailList {
+  display: grid;
+  gap: 10px;
+}
+
+.detailRow {
+  display: grid;
+  grid-template-columns: 2fr 1fr 80px 120px auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--gray-200);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fafbfc;
+}
+
+.detailName {
+  display: grid;
+  gap: 2px;
+  font-size: .82rem;
+  color: var(--blue-dark);
+}
+
+.detailSku {
+  font-size: .7rem;
+  color: var(--gray-400);
+}
+
+.detailSelect,
+.detailQty {
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: .78rem;
+}
+
+.detailSubtotal {
+  font-family: var(--mono);
+  font-size: .8rem;
+  color: var(--blue-dark);
+  text-align: right;
+}
+
+.detailRemove {
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: .72rem;
+  color: var(--gray-500);
+  transition: var(--transition);
+}
+
+.detailRemove:hover { border-color: var(--red); color: var(--red); }
+
+.detailActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.saveBtn {
+  background: var(--blue-dark);
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: .78rem;
+  font-weight: 600;
+}
+
+.cancelBtn {
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: .78rem;
+  color: var(--gray-500);
+}
+
+.cancelBtn:hover { border-color: var(--gray-400); color: var(--gray-700); }
+
+@media (max-width: 900px) {
+  .detailRow {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  .detailSubtotal { text-align: left; }
+}
