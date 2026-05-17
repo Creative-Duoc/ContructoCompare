@@ -2,13 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
-from backend.app.database import get_db
+from app.database import get_db
 
 # Importamos los Modelos (Base de datos)
-from backend.app.models.inventory import ProductoMaestro, PrecioRetailer, Categoria, Retailer
+from app.models.inventory import ProductoMaestro, PrecioRetailer, Categoria, Retailer
 
 # Importamos los Esquemas
-from backend.app.schemas.inventory import PrecioScraperCreate, PrecioResponse, ProductoResponse, ProductoSodimacResponse
+from app.schemas.inventory import PrecioScraperCreate, PrecioResponse, ProductoResponse, ProductoSodimacResponse
 
 NOMBRE_RETAILER_SODIMAC = "Sodimac"
 

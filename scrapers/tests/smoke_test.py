@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 # Agregar el directorio actual al path para importar sodimac.py
-SCRAPERS_DIR = Path(__file__).resolve().parent
+SCRAPERS_DIR = Path(__file__).resolve().parent.parent
 if str(SCRAPERS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRAPERS_DIR))
 
@@ -30,11 +30,9 @@ async def run_smoke_test():
             max_category_urls=1,
             headless=True
         )
-        
         if not products_1:
             print("❌ FALLO: No se obtuvieron resultados de la tienda.")
             return False
-            
         print(f"✅ ÉXITO: Se obtuvieron {len(products_1)} productos de la tienda '{products_1[0].store}'.")
 
         # ---------------------------------------------------------
@@ -42,7 +40,6 @@ async def run_smoke_test():
         # ---------------------------------------------------------
         print("\n2. Validando información básica (Nombre y Precio)...")
         p = products_1[0]
-        
         # El precio puede venir en distintos campos según Sodimac
         has_price = any([p.precio_internet, p.precio_oferta, p.precio_tarjeta, p.precio_normal])
         
