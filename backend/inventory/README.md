@@ -45,14 +45,14 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
 Desde la raíz del proyecto, con el entorno virtual activo:
 
 ```bash
-cd backend
-python app/main.py
+cd backend/inventory
+python main.py
 ```
 
 También puedes usar Uvicorn directamente:
 
 ```bash
-uvicorn app.main:app --reload --port 8001
+uvicorn main:app --reload --port 8001
 ```
 
 ## Cómo probarlo
@@ -75,9 +75,9 @@ Authorization: Bearer <tu_token>
 
 ## Estructura
 
-- `app/main.py`: punto de entrada de la API.
-- `app/database.py`: conexión asíncrona a la base de datos.
-- `app/security.py`: hash de contraseñas y JWT.
-- `app/models/`: modelos de base de datos.
-- `app/routes/`: endpoints de la API.
-- `app/schemas/`: validación Pydantic.
+- `main.py`: punto de entrada de la API.
+- `database.py`: conexión asíncrona a la base de datos.
+- `security.py`: hash de contraseñas y JWT.
+- `models/`: modelos de base de datos.
+- `routes/`: endpoints de la API.
+- `schemas/`: validación Pydantic.

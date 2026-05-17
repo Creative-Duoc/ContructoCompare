@@ -93,6 +93,7 @@ class EasyScraper(BaseStoreScraper):
         parsed = urlparse(lowered)
 
         for blocked_prefix in [
+            "/search/",
             "/_next/",
             "/login/",
             "/checkout/",

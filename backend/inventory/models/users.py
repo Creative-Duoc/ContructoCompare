@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from backend.app.database import Base
+from backend.inventory.database import Base
 
 class TipoUsuario(Base):
     __tablename__ = "tipos_usuario"

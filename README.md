@@ -4,9 +4,10 @@ ConstructoCompare es una plataforma integral diseñada para el monitoreo y compa
 
 ## 🏗️ Arquitectura del Proyecto
 
-El proyecto está dividido en tres componentes principales:
+El proyecto está dividido en cuatro componentes principales:
 
-- **[Backend](./backend):** API REST construida con FastAPI, encargada de la lógica de negocio, autenticación y gestión de la base de datos (PostgreSQL + SQLAlchemy).
+- **[Backend Inventory](./backend/inventory):** API REST para inventario y usuarios, con autenticación y acceso a la base de datos.
+- **[Backend Quotes](./backend/quotes):** Microservicio FastAPI para CRUD de cotizaciones, con JWT compartido y base de datos compartida.
 - **[Scrapers](./scrapers):** Scripts de automatización basados en Playwright para extraer información de productos de Sodimac, Easy e Imperial.
 - **[Frontend](./frontend):** Prototipo funcional en Next.js para la visualización, comparación de precios en tiempo real (CLP/UF) y gestión de cotizaciones.
 
@@ -50,11 +51,26 @@ El proyecto está dividido en tres componentes principales:
 
 ```text
 .
-├── backend/          # API FastAPI y modelos de datos
+├── backend/           # Servicios backend
+│   ├── inventory/     # API de inventario y usuarios
+│   └── quotes/        # Microservicio de cotizaciones
 ├── frontend/         # Interfaz de usuario (React/Angular)
 ├── scrapers/         # Scripts de extracción de datos (Playwright)
 └── requirement.txt   # Dependencias del proyecto
 ```
+
+## ▶️ Servicios y Puertos
+
+- Backend principal: http://localhost:8001
+- Quotes Service: http://localhost:8002
+
+El microservicio de cotizaciones expone:
+
+- POST /api/v1/cotizaciones
+- GET /api/v1/cotizaciones
+- GET /api/v1/cotizaciones/{id}
+- PUT /api/v1/cotizaciones/{id}
+- DELETE /api/v1/cotizaciones/{id}
 
 ## 📝 Contribución
 

@@ -43,13 +43,20 @@ export interface QuoteItem {
   cantidad: number;
 }
 
-export interface Cotizacion {
-  id: string;
+export interface CotizacionDetalleApi {
+  id_detalle: number;
+  id_producto_maestro: number;
+  id_retailer: number;
+  cantidad: number;
+}
+
+export interface CotizacionApi {
+  id_cotizacion: number;
+  id_usuario: number;
   nombre_proyecto: string;
   fecha_creacion: string;
-  items: QuoteItem[];
-  total_clp: number;
-  total_uf: number;
+  estado: string;
+  detalles: CotizacionDetalleApi[];
 }
 
 export interface UFData {
@@ -59,6 +66,19 @@ export interface UFData {
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8001/api/v1';
+const QUOTES_API_BASE_URL = process.env.NEXT_PUBLIC_QUOTES_API_BASE_URL || 'http://localhost:8002/api/v1';
+
+const RETAILER_ID_BY_NAME: Record<string, number> = {
+  Sodimac: 1,
+  Easy: 2,
+  Imperial: 3,
+};
+
+const RETAILER_NAME_BY_ID: Record<number, TiendaPrecio['tienda']> = {
+  1: 'Sodimac',
+  2: 'Easy',
+  3: 'Imperial',
+};
 
 // ── HELPERS ──────────────────────────────────────────────────
 
@@ -89,6 +109,15 @@ export function getTiendaColor(tienda: string): string {
   return colors[tienda] ?? '#748194';
 }
 
+export function formatProductName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 async function apiFetch(endpoint: string, options: RequestInit = {}) {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
@@ -105,6 +134,27 @@ async function apiFetch(endpoint: string, options: RequestInit = {}) {
       throw new Error(msg);
     }
     
+    throw new Error(errorData.detail || 'Error en la petición');
+  }
+  return response.json();
+}
+
+async function apiFetchQuotes(endpoint: string, options: RequestInit = {}) {
+  const response = await fetch(`${QUOTES_API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
+
+    if (Array.isArray(errorData.detail)) {
+      const msg = errorData.detail.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ');
+      throw new Error(msg);
+    }
+
     throw new Error(errorData.detail || 'Error en la petición');
   }
   return response.json();
@@ -241,49 +291,71 @@ export async function fetchPriceHistory(idProducto: string): Promise<PrecioHisto
   }
 }
 
-export async function createQuote(quote: Omit<Cotizacion, 'id' | 'fecha_creacion'>): Promise<Cotizacion> {
+export function retailerIdToName(id: number): TiendaPrecio['tienda'] | undefined {
+  return RETAILER_NAME_BY_ID[id];
+}
+
+export function retailerNameToId(name: string): number | undefined {
+  return RETAILER_ID_BY_NAME[name];
+}
+
+export async function createQuote(nombre: string, items: QuoteItem[]): Promise<CotizacionApi> {
   const token = sessionStorage.getItem('cc_token');
-  return apiFetch('/quotes', {
+  if (!token) {
+    throw new Error('Sesion expirada. Inicia sesión nuevamente.');
+  }
+  const detalles = items.map(item => {
+    const retailerId = RETAILER_ID_BY_NAME[item.tienda_seleccionada.tienda];
+    if (!retailerId) {
+      throw new Error(`Retailer no soportado: ${item.tienda_seleccionada.tienda}`);
+    }
+    return {
+      id_producto_maestro: Number(item.producto.id),
+      id_retailer: retailerId,
+      cantidad: item.cantidad,
+    };
+  });
+
+  return apiFetchQuotes('/cotizaciones', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify(quote),
+    body: JSON.stringify({ nombre_proyecto: nombre, detalles }),
   });
 }
 
-export async function fetchQuotes(): Promise<Cotizacion[]> {
+export async function fetchQuotes(): Promise<CotizacionApi[]> {
   const token = sessionStorage.getItem('cc_token');
-  return apiFetch('/quotes', {
+  if (!token) {
+    throw new Error('Sesion expirada. Inicia sesión nuevamente.');
+  }
+  return apiFetchQuotes('/cotizaciones', {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
 
-export async function deleteQuote(id: string): Promise<void> {
+export async function deleteQuote(id: number): Promise<void> {
   const token = sessionStorage.getItem('cc_token');
-  await apiFetch(`/quotes/${id}`, {
+  if (!token) {
+    throw new Error('Sesion expirada. Inicia sesión nuevamente.');
+  }
+  await apiFetchQuotes(`/cotizaciones/${id}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
   });
 }
 
-export function saveLocalCotizacion(userEmail: string, cotizacion: Cotizacion) {
-  const key = `cc_quotes_${userEmail}`;
-  const existing = getLocalCotizaciones(userEmail);
-  localStorage.setItem(key, JSON.stringify([cotizacion, ...existing]));
-}
-
-export function getLocalCotizaciones(userEmail: string): Cotizacion[] {
-  const key = `cc_quotes_${userEmail}`;
-  try {
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
+export async function updateQuote(
+  id: number,
+  payload: { nombre_proyecto?: string; estado?: string; detalles?: Array<{ id_producto_maestro: number; id_retailer: number; cantidad: number }> }
+): Promise<CotizacionApi> {
+  const token = sessionStorage.getItem('cc_token');
+  if (!token) {
+    throw new Error('Sesion expirada. Inicia sesión nuevamente.');
   }
+  return apiFetchQuotes(`/cotizaciones/${id}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
 }
 
-export function deleteLocalCotizacion(userEmail: string, id: string) {
-  const key = `cc_quotes_${userEmail}`;
-  const existing = getLocalCotizaciones(userEmail);
-  const updated = existing.filter(c => c.id !== id);
-  localStorage.setItem(key, JSON.stringify(updated));
-}
