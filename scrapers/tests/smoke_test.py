@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 # Configurar paths para importación
-SCRAPERS_DIR = Path(__file__).resolve().parent
+SCRAPERS_DIR = Path(__file__).resolve().parent.parent
 if str(SCRAPERS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRAPERS_DIR))
 
