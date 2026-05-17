@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Numeric, Boolean, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
-from backend.app.database import Base
+from backend.inventory.database import Base
 import datetime
 
 class Categoria(Base):
@@ -73,7 +73,11 @@ class Cotizacion(Base):
     fecha_creacion = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
     estado = Column(String(50), default="Borrador")
 
-    detalles = relationship("DetalleCotizacion", back_populates="cotizacion")
+    detalles = relationship(
+        "DetalleCotizacion",
+        back_populates="cotizacion",
+        cascade="all, delete-orphan",
+    )
 
 class DetalleCotizacion(Base):
     __tablename__ = "detalle_cotizacion"

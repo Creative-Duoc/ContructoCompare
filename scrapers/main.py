@@ -24,10 +24,11 @@ from scrapers.easy import EasyScraper
 from scrapers.imperial import ImperialScraper
 from scrapers.sodimac import SodimacScraper
 
-DATA_DIR = Path("data")
+DATA_DIR = Path(__file__).resolve().parent / "data"
 BRONZE_DIR = DATA_DIR / "bronze"
 DEFAULT_QUERIES = ["cemento", "taladro", "pintura", "fierro", "pvc"]
 DEFAULT_MAX_PRODUCTS = 0
+FAST_CATEGORY_LIMIT = 20
 ALL_STORES = ["sodimac", "easy", "imperial"]
 
 
@@ -227,6 +228,11 @@ def parse_args() -> argparse.Namespace:
     bronze_group.add_argument("--only-easy", action="store_true")
     bronze_group.add_argument("--only-imperial", action="store_true")
     bronze_group.add_argument("--headful", action="store_true", help="Run visible browser.")
+    bronze_group.add_argument(
+        "--fast",
+        action="store_true",
+        help="Modo rapido: limita a 20 categorias por tienda si no se especifica otro limite.",
+    )
     
     bronze_group.add_argument("--sodimac-max-category-urls", type=int, default=0)
     bronze_group.add_argument("--sodimac-category-workers", type=int, default=4)
@@ -278,6 +284,14 @@ def parse_args() -> argparse.Namespace:
 
 async def main() -> None:
     args = parse_args()
+
+    if args.fast:
+        if args.sodimac_max_category_urls == 0:
+            args.sodimac_max_category_urls = FAST_CATEGORY_LIMIT
+        if args.easy_max_category_urls == 0:
+            args.easy_max_category_urls = FAST_CATEGORY_LIMIT
+        if args.imperial_max_category_urls == 0:
+            args.imperial_max_category_urls = FAST_CATEGORY_LIMIT
     
     # Logic to determine which stages to run
     run_all = not any([args.only_bronze, args.only_silver, args.only_gold, args.only_llm, args.only_load])

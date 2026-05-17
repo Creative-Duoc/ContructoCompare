@@ -3,7 +3,8 @@ from pathlib import Path
 
 def analyze_triple_matches():
     # Usar ruta relativa correcta si se ejecuta desde la carpeta 'scrapers'
-    gold_p = Path("../data/gold/gold_products.json")
+    DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+    gold_p = DATA_DIR / "gold" / "gold_products.json"
     if not gold_p.exists():
         print(f"El archivo Gold no existe en: {gold_p.absolute()}")
         return
