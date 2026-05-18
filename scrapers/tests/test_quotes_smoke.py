@@ -4,7 +4,6 @@ import string
 
 import httpx
 
-
 QUOTES_BASE_URL = os.getenv("QUOTES_BASE_URL", "http://127.0.0.1:8002/api/v1")
 USERS_BASE_URL = os.getenv("USERS_BASE_URL", "http://127.0.0.1:8001/api/v1")
 INVENTORY_BASE_URL = os.getenv("INVENTORY_BASE_URL", "http://127.0.0.1:8001/api/v1")
@@ -19,10 +18,8 @@ RETAILER_ID_BY_NAME = {
     "Imperial": 3,
 }
 
-
 def _random_suffix(length: int = 6) -> str:
     return "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(length))
-
 
 def _get_token(client: httpx.Client) -> str:
     payload = {
@@ -45,7 +42,6 @@ def _get_token(client: httpx.Client) -> str:
         raise RuntimeError("Token no recibido desde login")
     return token
 
-
 def _pick_product_detail(client: httpx.Client) -> dict:
     resp = client.get(f"{INVENTORY_BASE_URL}/inventory/all/productos")
     resp.raise_for_status()
@@ -64,7 +60,6 @@ def _pick_product_detail(client: httpx.Client) -> dict:
             }
 
     raise RuntimeError("No se pudo mapear retailer a ID")
-
 
 def test_quotes_crud_smoke():
     with httpx.Client(timeout=30) as client:
