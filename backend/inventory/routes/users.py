@@ -4,10 +4,10 @@ from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from database import get_db
-from models.users import Usuario
-from schemas.users import TokenResponse, UsuarioCreate, UsuarioLogin, UsuarioResponse
-from security import (
+from backend.inventory.database import get_db
+from backend.inventory.models.users import Usuario
+from backend.inventory.schemas.users import TokenResponse, UsuarioCreate, UsuarioLogin, UsuarioResponse
+from backend.inventory.security import (
     ALGORITHM,
     SECRET_KEY,
     create_access_token,
