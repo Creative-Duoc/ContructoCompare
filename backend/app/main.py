@@ -11,8 +11,8 @@ if __package__ in {None, ""}:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.app.database import Base, engine
-from backend.app.routes import inventory, users
+from app.database import Base, engine
+from app.routes import inventory, users
 
 app = FastAPI(title="ConstructoCompare - Inventory Service")
 AUTO_CREATE_TABLES = os.getenv("AUTO_CREATE_TABLES", "true").lower() in {"1", "true", "yes", "on"}
