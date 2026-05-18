@@ -136,3 +136,44 @@ async def obtener_todos_los_productos(db: AsyncSession = Depends(get_db)):
 
     result = await db.execute(query)
     return result.mappings().all()
+
+@router.get("/search")
+async def buscar_productos_agrupados(q: str, db: AsyncSession = Depends(get_db)):
+    """
+    Busca productos por término y los devuelve agrupados por su ID Maestro,
+    consolidando las ofertas de múltiples tiendas en un solo bloque.
+    """
+    if not q or len(q.strip()) < 3:
+        raise HTTPException(status_code=400, detail="El parámetro de búsqueda 'q' debe tener al menos 3 caracteres.")
+
+    # Consulta CORREGIDA: Se eliminó PrecioRetailer.sku_tienda
+    query = (
+        select(
+            ProductoMaestro.id_producto,
+            ProductoMaestro.nombre_producto,
+            Retailer.nombre_retailer.label("tienda"),
+            PrecioRetailer.precio_clp,
+            PrecioRetailer.disponibilidad,
+            PrecioRetailer.link_producto
+        )
+        .join(PrecioRetailer, PrecioRetailer.id_producto_maestro == ProductoMaestro.id_producto)
+        .join(Retailer, Retailer.id_retailer == PrecioRetailer.id_retailer)
+        .where(ProductoMaestro.nombre_producto.ilike(f"%{q}%"))
+    )
+
+    result = await db.execute(query)
+    filas = result.mappings().all()
+
+    # Algoritmo de agrupación en memoria por ID Maestro
+    productos_agrupados = {}
+    for fila in filas:
+        id_maestro = fila["id_producto"]
+       
+        if id_maestro not in productos_agrupados:
+            productos_agrupados[id_maestro] = {
+                "id_producto_maestro": id_maestro,
+                "nombre_producto": fila["nombre_producto"],
+                "retailer_offers": []
+            }
+       
+        # Insertar la oferta específica de la tienda dentro del grupo maestro
