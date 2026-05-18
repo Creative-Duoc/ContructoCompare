@@ -1,0 +1,2 @@
+web: gunicorn backend.inventory.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+quotes: gunicorn backend.quotes.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:${QUOTES_PORT:-8002}

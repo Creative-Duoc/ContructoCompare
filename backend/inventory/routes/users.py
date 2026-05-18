@@ -3,10 +3,17 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+<<<<<<< HEAD:backend/app/routes/users.py
 from app.database import get_db
 from app.models.users import Usuario
 from app.schemas.users import TokenResponse, UsuarioCreate, UsuarioLogin, UsuarioResponse
 from app.security import (
+=======
+from backend.inventory.database import get_db
+from backend.inventory.models.users import Usuario
+from backend.inventory.schemas.users import TokenResponse, UsuarioCreate, UsuarioLogin, UsuarioResponse
+from backend.inventory.security import (
+>>>>>>> 02f376ae7a42795309f8148eef863ffcd16e4f4d:backend/inventory/routes/users.py
     ALGORITHM,
     SECRET_KEY,
     create_access_token,
@@ -61,6 +68,7 @@ async def registrar_usuario(user_data: UsuarioCreate, db: AsyncSession = Depends
         nombre_completo=user_data.nombre_completo,
         correo_electronico=user_data.correo_electronico,
         password_hash=get_password_hash(user_data.password),
+        id_tipo_usuario=user_data.id_tipo_usuario,
     )
 
     db.add(nuevo_usuario)

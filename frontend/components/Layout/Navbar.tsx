@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useQuote } from '../../hooks/useQuote';
 import s from './Navbar.module.css';
@@ -14,6 +15,7 @@ export default function Navbar({ ufValue, onOpenQuote }: NavbarProps) {
 
   const initials = user?.nombre?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() ?? 'U';
   const clpFormat = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 });
+
 
   return (
     <nav className={s.navbar}>
@@ -34,7 +36,7 @@ export default function Navbar({ ufValue, onOpenQuote }: NavbarProps) {
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <polyline points="14 2 14 8 20 8"/>
           </svg>
-          Cotización
+          Mi cotización
           {items.length > 0 && <span className={s.quoteBadge}>{items.length}</span>}
         </button>
 

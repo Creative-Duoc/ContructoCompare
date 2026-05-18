@@ -1,21 +1,5 @@
 /**
- * ConstructoCompare PRO — Capa de Servicio (Microservicio FastAPI mock)
- *
- * Esta capa abstrae todas las llamadas al backend FastAPI.
- * Cuando el backend esté disponible, cada función reemplaza su
- * implementación mock por un fetch() al endpoint documentado.
- *
- * Estructura REST del microservicio:
- *   POST   /api/v1/auth/register   → Registro de usuario
- *   POST   /api/v1/auth/login      → Login JWT
- *   GET    /api/v1/auth/me         → Sesión activa
- *   GET    /api/v1/products        → Búsqueda de productos ?q=&tienda=
- *   GET    /api/v1/products/:id    → Detalle producto
- *   GET    /api/v1/products/:id/history → Historial de precios
- *   GET    /api/v1/uf/current      → Valor UF del día
- *   POST   /api/v1/quotes          → Crear cotización
- *   GET    /api/v1/quotes          → Listar cotizaciones del usuario
- *   DELETE /api/v1/quotes/:id      → Eliminar cotización
+ * ConstructoCompare — Capa de Servicio API
  */
 
 // ── TIPOS ────────────────────────────────────────────────────
@@ -40,6 +24,13 @@ export interface Producto {
   tiendas: TiendaPrecio[];
 }
 
+export interface Usuario {
+  id: string;
+  nombre: string;
+  email: string;
+  id_tipo_usuario: number;
+}
+
 export interface PrecioHistorico {
   fecha: string;
   precio: number;
@@ -52,20 +43,20 @@ export interface QuoteItem {
   cantidad: number;
 }
 
-export interface Cotizacion {
-  id: string;
-  nombre_proyecto: string;
-  fecha_creacion: string;
-  items: QuoteItem[];
-  total_clp: number;
-  total_uf: number;
+export interface CotizacionDetalleApi {
+  id_detalle: number;
+  id_producto_maestro: number;
+  id_retailer: number;
+  cantidad: number;
 }
 
-export interface Usuario {
-  id: string;
-  nombre: string;
-  email: string;
-  tipo: 'particular' | 'profesional' | 'empresa';
+export interface CotizacionApi {
+  id_cotizacion: number;
+  id_usuario: number;
+  nombre_proyecto: string;
+  fecha_creacion: string;
+  estado: string;
+  detalles: CotizacionDetalleApi[];
 }
 
 export interface UFData {
@@ -74,9 +65,20 @@ export interface UFData {
   fuente: string;
 }
 
-// ── DATOS MOCK ────────────────────────────────────────────────
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8001/api/v1';
+const QUOTES_API_BASE_URL = process.env.NEXT_PUBLIC_QUOTES_API_BASE_URL || 'http://localhost:8002/api/v1';
 
-const API_BASE_URL = 'http://localhost:8001/api/v1';
+const RETAILER_ID_BY_NAME: Record<string, number> = {
+  Sodimac: 1,
+  Easy: 2,
+  Imperial: 3,
+};
+
+const RETAILER_NAME_BY_ID: Record<number, TiendaPrecio['tienda']> = {
+  1: 'Sodimac',
+  2: 'Easy',
+  3: 'Imperial',
+};
 
 // ── HELPERS ──────────────────────────────────────────────────
 
@@ -107,6 +109,15 @@ export function getTiendaColor(tienda: string): string {
   return colors[tienda] ?? '#748194';
 }
 
+export function formatProductName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 async function apiFetch(endpoint: string, options: RequestInit = {}) {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
@@ -116,21 +127,44 @@ async function apiFetch(endpoint: string, options: RequestInit = {}) {
     },
   });
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Error desconocido' }));
-    throw new Error(error.detail || 'Error en la petición');
+    const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
+    
+    if (Array.isArray(errorData.detail)) {
+      const msg = errorData.detail.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ');
+      throw new Error(msg);
+    }
+    
+    throw new Error(errorData.detail || 'Error en la petición');
+  }
+  return response.json();
+}
+
+async function apiFetchQuotes(endpoint: string, options: RequestInit = {}) {
+  const response = await fetch(`${QUOTES_API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
+
+    if (Array.isArray(errorData.detail)) {
+      const msg = errorData.detail.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ');
+      throw new Error(msg);
+    }
+
+    throw new Error(errorData.detail || 'Error en la petición');
   }
   return response.json();
 }
 
 // ── API FUNCTIONS ─────────────────────────────────────────────
 
-/**
- * GET /api/v1/uf/current
- */
 export async function fetchUF(): Promise<UFData> {
   try {
     const res = await fetch('https://mindicador.cl/api/uf');
-    if (!res.ok) throw new Error('Error fetching UF');
     const data = await res.json();
     return { 
       valor: data.serie[0].valor, 
@@ -138,144 +172,190 @@ export async function fetchUF(): Promise<UFData> {
       fuente: 'mindicador.cl' 
     };
   } catch (error) {
-    console.error('Error obteniendo UF:', error);
-    // Fallback de seguridad en caso de que la API de mindicador falle
-    return { valor: 39847.23, fecha: new Date().toISOString().split('T')[0], fuente: 'mindicador.cl (fallback)' };
+    return { valor: 38000, fecha: new Date().toISOString().split('T')[0], fuente: 'fallback' };
   }
 }
 
-/**
- * GET /api/v1/inventory/sodimac/productos
- * Adaptamos la respuesta del backend al formato que espera el frontend
- */
 export const CATEGORIAS = [
   'Todos', 'Taladros', 'Cemento y Hormigón', 'Fierro y Acero', 'Madera y Tableros',
   'Pintura', 'Cerámicos y Porcelanato', 'Tuberías y Sanitarios',
   'Electricidad', 'Aislación',
 ];
 
-/**
- * GET /api/v1/inventory/sodimac/productos
- */
 export async function searchProducts(query: string, categoria?: string): Promise<Producto[]> {
   try {
-    const data: any[] = await apiFetch('/inventory/sodimac/productos');
+    const data: any[] = await apiFetch('/inventory/all/productos');
     
-    const productos: Producto[] = data.map(item => ({
-      id: String(item.id_producto || Math.random()),
-      nombre: item.nombre_producto || 'Producto sin nombre',
-      marca: 'Sodimac', 
-      categoria: item.categoria || 'General',
-      foto_url: '',
-      sku: String(item.sku_maestro || ''),
-      unidad: 'unidad',
-      tiendas: [
-        {
-          tienda: 'Sodimac',
-          precio_real: Number(item.precio_clp) || 0,
-          precio_oferta: null,
-          stock: Boolean(item.disponibilidad),
-          url_producto: item.link_producto || '#',
-          fecha_actualizacion: item.fecha_captura || new Date().toISOString()
-        }
-      ]
-    }));
+    const grouped = new Map<string, Producto>();
 
-    const q = query.trim().toLowerCase();
+    data.forEach(item => {
+      const id = String(item.id_producto);
+      const tienda: TiendaPrecio = {
+        tienda: item.retailer as any,
+        precio_real: Number(item.precio_clp),
+        precio_oferta: null,
+        stock: Boolean(item.disponibilidad),
+        url_producto: item.link_producto,
+        fecha_actualizacion: new Date(item.fecha_captura).toLocaleDateString('es-CL'),
+      };
+
+      if (grouped.has(id)) {
+        grouped.get(id)!.tiendas.push(tienda);
+      } else {
+        grouped.set(id, {
+          id: id,
+          nombre: item.nombre_producto,
+          marca: item.marca || 'Genérico',
+          categoria: item.categoria,
+          foto_url: item.foto_url || '', 
+          sku: item.sku_tienda ? String(item.sku_tienda) : 'S/N',
+          unidad: item.valor_medida ? `${item.valor_medida} ${item.abreviatura_unidad || ''}` : 'unidad',
+          tiendas: [tienda],
+        });
+      }
+    });
+
+    const productos = Array.from(grouped.values());
+    const q = query.toLowerCase();
     const cat = categoria || 'Todos';
 
     return productos.filter(p => {
-      // El nombre o SKU debe coincidir con la búsqueda (si hay búsqueda)
-      const matchQuery = !q || 
-        p.nombre.toLowerCase().includes(q) || 
-        p.sku.toLowerCase().includes(q);
-      
-      // La categoría debe coincidir. 
-      let matchCat = cat === 'Todos';
-      if (!matchCat) {
-        const catLower = cat.toLowerCase();
-        
-        // Obtenemos palabras clave de la categoría (ej: "Fierro y Acero" -> ["fierro", "acero"])
-        // Filtramos conectores comunes como "y", "o", "en"
-        const keywords = catLower
-          .split(/[\s,y/]+/)
-          .filter(k => k.length > 2)
-          .map(k => k.replace(/s$/, '')); // Normalizamos plurales simples
-
-        const prodNombre = p.nombre.toLowerCase();
-        const prodCat = p.categoria.toLowerCase();
-
-        // Si alguna de las palabras clave de la categoría seleccionada coincide 
-        // con el nombre o la categoría del producto, lo mostramos.
-        matchCat = keywords.some(keyword => 
-          prodCat.includes(keyword) || prodNombre.includes(keyword)
-        );
+      const matchQuery = !q || p.nombre.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || p.marca.toLowerCase().includes(q);
+      let matchChip = cat === 'Todos';
+      if (!matchChip) {
+        const keyword = cat.toLowerCase().replace(/s$/, '').split(' ')[0];
+        matchChip = p.nombre.toLowerCase().includes(keyword) || p.categoria.toLowerCase().includes(keyword);
       }
-      
-      return matchQuery && matchCat;
+      return matchQuery && matchChip;
     });
   } catch (error) {
-    console.error('Error en searchProducts:', error);
+    console.error('Error searchProducts:', error);
     return [];
   }
 }
 
-/**
- * POST /api/v1/users/login
- */
 export async function loginUser(email: string, pass: string): Promise<{ success: boolean; user?: Usuario; error?: string }> {
   try {
     const tokenRes = await apiFetch('/users/login', {
       method: 'POST',
-      body: JSON.stringify({
-        correo_electronico: email,
-        password: pass,
-      }),
+      body: JSON.stringify({ correo_electronico: email, password: pass }),
     });
 
     if (tokenRes.access_token) {
-      // Guardamos el token en sessionStorage para apiFetch (si lo usara con Bearer)
       sessionStorage.setItem('cc_token', tokenRes.access_token);
-
-      // Obtenemos los datos del usuario logueado
       const userRes = await apiFetch('/users/me', {
-        headers: {
-          Authorization: `Bearer ${tokenRes.access_token}`,
-        },
+        headers: { Authorization: `Bearer ${tokenRes.access_token}` },
       });
-
       const user: Usuario = {
         id: String(userRes.id_usuario),
         nombre: userRes.nombre_completo,
         email: userRes.correo_electronico,
-        tipo: 'particular', // Valor por defecto ya que el backend no lo maneja aún
+        id_tipo_usuario: userRes.id_tipo_usuario,
       };
-
       return { success: true, user };
     }
-    return { success: false, error: 'No se recibió token de acceso' };
+    return { success: false, error: 'Token no recibido' };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Error al iniciar sesión' };
+    return { success: false, error: error.message };
   }
 }
 
-/**
- * POST /api/v1/users/register
- */
-export async function registerUser(nombre: string, email: string, pass: string, tipo: string): Promise<{ success: boolean; error?: string }> {
+export async function registerUser(nombre: string, email: string, pass: string, idTipoUsuario: number): Promise<{ success: boolean; error?: string }> {
   try {
     await apiFetch('/users/register', {
       method: 'POST',
-      body: JSON.stringify({
-        nombre_completo: nombre,
-        correo_electronico: email,
+      body: JSON.stringify({ 
+        nombre_completo: nombre, 
+        correo_electronico: email, 
         password: pass,
-        // tipo no es aceptado por el backend actual según UsuarioCreate
+        id_tipo_usuario: idTipoUsuario
       }),
     });
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Error al registrar usuario' };
+    return { success: false, error: error.message };
   }
+}
+
+export async function fetchPriceHistory(idProducto: string): Promise<PrecioHistorico[]> {
+  try {
+    const data: any[] = await apiFetch(`/inventory/productos/${idProducto}/historial`);
+    return data.map(item => ({
+      fecha: item.fecha_captura,
+      precio: Number(item.precio_clp),
+      tienda: 'Sodimac' 
+    }));
+  } catch (error) {
+    console.error('Error fetchPriceHistory:', error);
+    return [];
+  }
+}
+
+export function retailerIdToName(id: number): TiendaPrecio['tienda'] | undefined {
+  return RETAILER_NAME_BY_ID[id];
+}
+
+export function retailerNameToId(name: string): number | undefined {
+  return RETAILER_ID_BY_NAME[name];
+}
+
+export async function createQuote(nombre: string, items: QuoteItem[]): Promise<CotizacionApi> {
+  const token = sessionStorage.getItem('cc_token');
+  if (!token) {
+    throw new Error('Sesion expirada. Inicia sesión nuevamente.');
+  }
+  const detalles = items.map(item => {
+    const retailerId = RETAILER_ID_BY_NAME[item.tienda_seleccionada.tienda];
+    if (!retailerId) {
+      throw new Error(`Retailer no soportado: ${item.tienda_seleccionada.tienda}`);
+    }
+    return {
+      id_producto_maestro: Number(item.producto.id),
+      id_retailer: retailerId,
+      cantidad: item.cantidad,
+    };
+  });
+
+  return apiFetchQuotes('/cotizaciones', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ nombre_proyecto: nombre, detalles }),
+  });
+}
+
+export async function fetchQuotes(): Promise<CotizacionApi[]> {
+  const token = sessionStorage.getItem('cc_token');
+  if (!token) {
+    throw new Error('Sesion expirada. Inicia sesión nuevamente.');
+  }
+  return apiFetchQuotes('/cotizaciones', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function deleteQuote(id: number): Promise<void> {
+  const token = sessionStorage.getItem('cc_token');
+  if (!token) {
+    throw new Error('Sesion expirada. Inicia sesión nuevamente.');
+  }
+  await apiFetchQuotes(`/cotizaciones/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function updateQuote(
+  id: number,
+  payload: { nombre_proyecto?: string; estado?: string; detalles?: Array<{ id_producto_maestro: number; id_retailer: number; cantidad: number }> }
+): Promise<CotizacionApi> {
+  const token = sessionStorage.getItem('cc_token');
+  if (!token) {
+    throw new Error('Sesion expirada. Inicia sesión nuevamente.');
+  }
+  return apiFetchQuotes(`/cotizaciones/${id}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
 }
 
