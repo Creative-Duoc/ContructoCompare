@@ -304,16 +304,24 @@ class BaseStoreScraper:
         if not normalized_queries:
             return True
 
-        slug = self.extract_slug(url)
-        if not slug:
+        # Obtenemos el path completo normalizado (ej: /herramientas/taladros/percutores -> herramientas taladros percutores)
+        path = unquote(urlparse(url).path).lower()
+        full_path_text = normalize_name(path.replace("/", " ").replace("-", " "))
+        
+        if not full_path_text:
             return False
 
-        slug_tokens = set(slug.split())
+        path_tokens = full_path_text.split()
         for query in normalized_queries:
-            query_tokens = set(query.split())
-            if slug_tokens & query_tokens:
-                return True
-            if token_similarity(slug, query) >= 72:
+            query_tokens = query.split()
+            # Si alguna palabra de la query está contenida en alguna palabra de la URL (o viceversa)
+            for q_t in query_tokens:
+                for p_t in path_tokens:
+                    if q_t in p_t or p_t in q_t:
+                        return True
+            
+            # O si hay una similitud alta con el path completo
+            if token_similarity(full_path_text, query) >= 60:
                 return True
         return False
 

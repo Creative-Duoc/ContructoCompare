@@ -1,4 +1,4 @@
-import { Producto, TiendaPrecio, getBestPrice, getPrecioFinal, formatCLP, formatUF, getTiendaColor } from '../../services/api';
+import { Producto, TiendaPrecio, getBestPrice, getPrecioFinal, formatCLP, formatUF, getTiendaColor, formatProductName } from '../../services/api';
 import { useQuote } from '../../hooks/useQuote';
 import s from './ProductCard.module.css';
 
@@ -42,9 +42,9 @@ export default function ProductCard({ producto, ufValue, showUF, onShowHistory, 
           className={s.nameLink}
           title={`Ver mejor precio en ${best.tienda}`}
         >
-          <div className={s.name}>{producto.nombre}</div>
+          <div className={s.name}>{formatProductName(producto.nombre)}</div>
         </a>
-        <div className={s.brand}>{producto.marca} · Por {producto.unidad}</div>
+        <div className={s.brand}>{formatProductName(producto.marca)} · Por {producto.unidad}</div>
       </div>
 
       {/* Tabla comparativa multitienda — HU2 */}

@@ -2,7 +2,7 @@ import os
 import sys
 from pathlib import Path
 
-# Allow running from backend/app with: python .\\main.py
+# Allow running from backend/inventory with: python main.py
 if __package__ in {None, ""}:
     project_root = Path(__file__).resolve().parents[2]
     if str(project_root) not in sys.path:
@@ -11,10 +11,10 @@ if __package__ in {None, ""}:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.app.database import Base, engine, SessionLocal
-from backend.app.routes import inventory, users
-from backend.app.models.users import TipoUsuario
-from backend.app.models.inventory import Retailer, UnidadMedida
+from database import Base, engine, SessionLocal
+from routes import inventory, users
+from models.users import TipoUsuario
+from models.inventory import Retailer, UnidadMedida
 
 app = FastAPI(title="ConstructoCompare - Inventory Service")
 AUTO_CREATE_TABLES = os.getenv("AUTO_CREATE_TABLES", "true").lower() in {"1", "true", "yes", "on"}

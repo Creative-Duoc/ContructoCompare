@@ -13,15 +13,16 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 # Permite ejecutar desde cualquier lugar dentro del proyecto
-ROOT_DIR = Path(__file__).resolve().parents[1]
+ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from sqlalchemy.future import select
+from sqlalchemy import text
 from sqlalchemy import func
 
-from backend.app.database import SessionLocal
-from backend.app.models.inventory import Categoria, PrecioRetailer, ProductoMaestro, Retailer, Marca, UnidadMedida
+from backend.inventory.database import SessionLocal
+from backend.inventory.models.inventory import Categoria, PrecioRetailer, ProductoMaestro, Retailer, Marca, UnidadMedida
 from core.normalizer import extract_numeric_specs, normalize_unit_value
 
 # Configuración de archivos
@@ -88,6 +89,9 @@ async def load_gold(json_path: Path = DEFAULT_GOLD_JSON) -> None:
 
     async with SessionLocal() as session:
         async with session.begin():
+            await session.execute(
+                text("ALTER TABLE producto_maestro ADD COLUMN IF NOT EXISTS foto_url VARCHAR")
+            )
             # --- 1. PREPARACIÓN Y CACHÉ ---
             retailer_map = {}
             category_map = {}
