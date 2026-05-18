@@ -3,17 +3,11 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-<<<<<<< HEAD:backend/app/routes/users.py
-from app.database import get_db
-from app.models.users import Usuario
-from app.schemas.users import TokenResponse, UsuarioCreate, UsuarioLogin, UsuarioResponse
-from app.security import (
-=======
-from backend.inventory.database import get_db
-from backend.inventory.models.users import Usuario
-from backend.inventory.schemas.users import TokenResponse, UsuarioCreate, UsuarioLogin, UsuarioResponse
-from backend.inventory.security import (
->>>>>>> 02f376ae7a42795309f8148eef863ffcd16e4f4d:backend/inventory/routes/users.py
+
+from database import get_db
+from models.users import Usuario
+from schemas.users import TokenResponse, UsuarioCreate, UsuarioLogin, UsuarioResponse
+from security import (
     ALGORITHM,
     SECRET_KEY,
     create_access_token,
