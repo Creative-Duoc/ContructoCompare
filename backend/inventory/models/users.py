@@ -5,6 +5,7 @@ from backend.inventory.database import Base
 
 class TipoUsuario(Base):
     __tablename__ = "tipos_usuario"
+    __table_args__ = {'extend_existing': True}
 
     id_tipo = Column(Integer, primary_key=True, index=True)
     nombre_tipo = Column(String(50), unique=True, nullable=False)  # 'Persona Natural', 'Empresa', etc.
@@ -14,6 +15,7 @@ class TipoUsuario(Base):
 
 class Usuario(Base):
     __tablename__ = "usuarios"
+    __table_args__ = {'extend_existing': True}
 
     id_usuario = Column(Integer, primary_key=True, index=True)
     nombre_completo = Column(String(150), nullable=False)
