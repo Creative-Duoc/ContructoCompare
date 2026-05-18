@@ -9,6 +9,13 @@ from backend.inventory.schemas.inventory import (
     PrecioResponse, 
     ProductoGeneralResponse,
 )
+from backend.inventory.models.inventory import Cotizacion, DetalleCotizacion
+from backend.inventory.schemas.inventory import CotizacionCreate, CotizacionResponse
+from backend.inventory.routes.users import get_current_user
+from backend.inventory.models.users import Usuario
+from sqlalchemy.orm import selectinload
+from sqlalchemy import select
+from typing import List
 
 router = APIRouter(prefix="/api/v1/inventory", tags=["Inventory Engine"])
 
@@ -94,3 +101,62 @@ async def obtener_todos_los_productos(db: AsyncSession = Depends(get_db)):
 
     result = await db.execute(query)
     return result.mappings().all()
+
+# --- Endpoints de Cotizaciones ---
+
+@router.post("/cotizaciones", response_model=CotizacionResponse, status_code=201)
+async def crear_cotizacion(
+    cotizacion: CotizacionCreate, 
+    db: AsyncSession = Depends(get_db),
+    usuario_actual: Usuario = Depends(get_current_user)  # Protegido por JWT
+):
+    # 1. Crear el objeto principal de la cotización ligado al usuario
+    nueva_cotizacion = Cotizacion(
+        id_usuario=usuario_actual.id_usuario,
+        nombre_proyecto=cotizacion.nombre_proyecto,
+        estado="Guardado"
+    )
+    db.add(nueva_cotizacion)
+    await db.flush()  # Para obtener el ID autogenerado sin hacer commit aún
+    
+    # 2. Agregar los detalles (productos) a la cotización
+    for detalle in cotizacion.detalles:
+        nuevo_detalle = DetalleCotizacion(
+            id_cotizacion=nueva_cotizacion.id_cotizacion,
+            id_producto_maestro=detalle.id_producto_maestro,
+            id_retailer=detalle.id_retailer,
+            cantidad=detalle.cantidad
+        )
+        db.add(nuevo_detalle)
+        
+    await db.commit()
+    
+    # 3. Refrescar para devolver con los detalles anidados
+    query_populada = (
+        select(Cotizacion)
+        .where(Cotizacion.id_cotizacion == nueva_cotizacion.id_cotizacion)
+        .options(selectinload(Cotizacion.detalles)) # <--- ESTO SOLUCIONA EL MISSINGGREENLET
+    )
+    result = await db.execute(query_populada)
+    coti_guardada = result.scalar_one()
+    
+    # FastAPI/SQLAlchemy requiere cargar la relación asíncrona manualmente o configurar 'lazy="selectin"' en el modelo
+    # Para simplicidad, como ya lo insertamos, confiaremos en el response_model de Pydantic
+    return coti_guardada
+
+
+@router.get("/cotizaciones", response_model=List[CotizacionResponse])
+async def obtener_mis_cotizaciones(db: AsyncSession = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    # ... (Si tienes lógica previa la mantienes, modificamos el select)
+    
+    # FORZAMOS LA CARGA ASÍNCRONA DE LA RELACIÓN DETALLES
+    query = (
+        select(Cotizacion)
+        .where(Cotizacion.id_usuario == current_user.id_usuario) # O como tengas filtrado por usuario
+        .options(selectinload(Cotizacion.detalles)) # <--- ESTA LÍNEA SANA EL MISSINGGREENLET
+    )
+    
+    result = await db.execute(query)
+    cotizaciones = result.scalars().all()
+    
+    return cotizaciones
