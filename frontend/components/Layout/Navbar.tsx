@@ -40,10 +40,12 @@ export default function Navbar({ ufValue, onOpenQuote }: NavbarProps) {
           {items.length > 0 && <span className={s.quoteBadge}>{items.length}</span>}
         </button>
 
-        <div className={s.userChip}>
-          <div className={s.avatar}>{initials}</div>
-          <span>{user?.nombre?.split(' ')[0]}</span>
-        </div>
+        <Link href="/perfil" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <div className={s.userChip} style={{ cursor: 'pointer', transition: 'background 0.2s' }}>
+            <div className={s.avatar}>{initials}</div>
+            <span>{user?.nombre?.split(' ')[0]}</span>
+          </div>
+        </Link>
 
         <button className={s.logoutBtn} onClick={logout}>Salir</button>
       </div>
