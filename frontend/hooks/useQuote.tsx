@@ -10,12 +10,26 @@ interface QuoteCtx {
   setItems: (items: QuoteItem[]) => void;
   totalCLP: number;
   saveQuote: (nombre: string) => Promise<{ success: boolean; error?: string }>;
+  activeQuoteId: number | null;
+  setActiveQuoteId: (id: number | null) => void;
+  initialSnapshot: string;
+  setInitialSnapshot: (snapshot: string) => void;
 }
 
 const QuoteContext = createContext<QuoteCtx>({} as QuoteCtx);
 
+export const serializeQuoteItems = (currentItems: QuoteItem[]) => {
+  return JSON.stringify(currentItems.map(i => ({
+    id: i.producto.id,
+    store: i.tienda_seleccionada.tienda,
+    qty: i.cantidad
+  })));
+};
+
 export function QuoteProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<QuoteItem[]>([]);
+  const [activeQuoteId, setActiveQuoteId] = useState<number | null>(null);
+  const [initialSnapshot, setInitialSnapshot] = useState<string>('');
 
   function addItem(producto: Producto, tienda: TiendaPrecio) {
     setItems(prev => {
@@ -46,7 +60,11 @@ export function QuoteProvider({ children }: { children: ReactNode }) {
     });
   }
 
-  function clearQuote() { setItems([]); }
+  function clearQuote() { 
+    setItems([]); 
+    setActiveQuoteId(null);
+    setInitialSnapshot('');
+  }
 
   function setItemsFromQuote(nextItems: QuoteItem[]) {
     setItems(nextItems);
@@ -65,7 +83,12 @@ export function QuoteProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <QuoteContext.Provider value={{ items, addItem, removeItem, updateQty, clearQuote, setItems: setItemsFromQuote, totalCLP, saveQuote }}>
+    <QuoteContext.Provider value={{ 
+      items, addItem, removeItem, updateQty, clearQuote, 
+      setItems: setItemsFromQuote, totalCLP, saveQuote, 
+      activeQuoteId, setActiveQuoteId,
+      initialSnapshot, setInitialSnapshot
+    }}>
       {children}
     </QuoteContext.Provider>
   );

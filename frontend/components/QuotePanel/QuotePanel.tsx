@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { useQuote } from '../../hooks/useQuote';
+import { useState } from 'react';
+import { useQuote, serializeQuoteItems } from '../../hooks/useQuote';
 import { useAuth } from '../../hooks/useAuth';
-import { CotizacionApi, Producto, QuoteItem, TiendaPrecio, fetchQuotes, formatCLP, formatUF, getPrecioFinal, getTiendaColor, retailerIdToName, retailerNameToId, searchProducts, updateQuote, formatProductName } from '../../services/api';
+import { formatCLP, formatUF, getPrecioFinal, getTiendaColor, updateQuote, formatProductName, QuoteItem } from '../../services/api';
 import s from './QuotePanel.module.css';
 
 interface Props {
@@ -12,62 +12,12 @@ interface Props {
 }
 
 export default function QuotePanel({ onClose, ufValue, showUF, onToggleUF }: Props) {
-  const { items, removeItem, updateQty, clearQuote, saveQuote, setItems, totalCLP } = useQuote();
+  const { 
+    items, removeItem, updateQty, clearQuote, saveQuote, setItems, totalCLP, 
+    activeQuoteId, setActiveQuoteId, initialSnapshot, setInitialSnapshot 
+  } = useQuote();
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
-  const [savedOpen, setSavedOpen] = useState(false);
-  const [savedQuotes, setSavedQuotes] = useState<CotizacionApi[]>([]);
-  const [loadingSaved, setLoadingSaved] = useState(false);
-  const [productMap, setProductMap] = useState<Map<string, Producto>>(new Map());
-  const [activeQuoteId, setActiveQuoteId] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!savedOpen || !user) return;
-
-    async function loadSaved() {
-      setLoadingSaved(true);
-      try {
-        const [quotes, products] = await Promise.all([
-          fetchQuotes(),
-          searchProducts('', 'Todos'),
-        ]);
-        setSavedQuotes(quotes);
-        setProductMap(new Map(products.map(p => [p.id, p])));
-      } catch (error) {
-        console.error('Error cargando cotizaciones:', error);
-      } finally {
-        setLoadingSaved(false);
-      }
-    }
-
-    loadSaved();
-  }, [savedOpen, user]);
-
-  function buildQuoteItems(detalles: CotizacionApi['detalles']): QuoteItem[] {
-    const result: QuoteItem[] = [];
-
-    detalles.forEach(det => {
-      const product = productMap.get(String(det.id_producto_maestro));
-      if (!product) return;
-      const storeName = retailerIdToName(det.id_retailer);
-      const store = product.tiendas.find(t => t.tienda === storeName) || product.tiendas[0];
-      if (!store) return;
-      result.push({ producto: product, tienda_seleccionada: store, cantidad: det.cantidad });
-    });
-
-    return result;
-  }
-
-  function handleLoadQuote(quote: CotizacionApi) {
-    const nextItems = buildQuoteItems(quote.detalles);
-    setItems(nextItems);
-    setActiveQuoteId(quote.id_cotizacion);
-  }
-
-  function handleNewQuote() {
-    clearQuote();
-    setActiveQuoteId(null);
-  }
 
   function handleRetailerChange(index: number, retailerName: string) {
     const selected = items[index];
@@ -82,49 +32,76 @@ export default function QuotePanel({ onClose, ufValue, showUF, onToggleUF }: Pro
 
   // HU7 — Guardar cotización
   async function handleSave() {
-    if (!user) return;
-    const defaultName = activeQuoteId
-      ? (savedQuotes.find(q => q.id_cotizacion === activeQuoteId)?.nombre_proyecto || 'Cotización sin nombre')
-      : 'Cotización sin nombre';
-    const nombre = prompt('Nombre del proyecto (ej: Obra Casa Maipú):', defaultName) ?? defaultName;
+    if (!user || saving) return; // Guard de seguridad extra contra dobles clics
+    
     setSaving(true);
+
     try {
       if (activeQuoteId) {
-        const detalles = items.map(item => {
-          const retailerId = retailerNameToId(item.tienda_seleccionada.tienda);
-          if (!retailerId) {
-            throw new Error(`Retailer no soportado: ${item.tienda_seleccionada.tienda}`);
-          }
+        const detalles = items.map(i => {
+          let retailerId = 1;
+          const tName = i.tienda_seleccionada.tienda.toLowerCase();
+          if (tName.includes('easy')) retailerId = 2;
+          if (tName.includes('imperial')) retailerId = 3;
+
           return {
-            id_producto_maestro: Number(item.producto.id),
+            id_producto_maestro: Number(i.producto.id),
             id_retailer: retailerId,
-            cantidad: item.cantidad,
+            cantidad: i.cantidad
           };
         });
-        const updated = await updateQuote(activeQuoteId, {
-          nombre_proyecto: nombre,
-          detalles,
-        });
-        setSavedQuotes(prev => prev.map(q => q.id_cotizacion === updated.id_cotizacion ? updated : q));
-        alert('✓ Cotización actualizada');
+
+        await updateQuote(activeQuoteId, { detalles });
+        
+        // Actualizamos la "foto" global después de guardar
+        setInitialSnapshot(serializeQuoteItems(items));
+        // No mostramos alerta ni cerramos el panel para que el usuario pueda seguir editando
       } else {
-        const result = await saveQuote(nombre);
+        const nombre = prompt('Nombre del proyecto (ej: Obra Casa Maipú):', 'Cotización sin nombre');
+        if (nombre === null) {
+          setSaving(false);
+          return;
+        }
+        
+        const finalName = nombre.trim() || 'Cotización sin nombre';
+        
+        const result = await saveQuote(finalName);
         if (!result.success) {
           alert(result.error || 'No se pudo guardar la cotización.');
           return;
         }
-        setActiveQuoteId(null);
-        alert('✓ Cotización guardada en "Mis Proyectos"');
+        // Al crear una nueva, el carrito se vacía automáticamente, así que cerramos el panel
+        onClose();
       }
-      onClose();
+    } catch (err: any) {
+      alert(err.message || 'Error al guardar la cotización');
     } finally {
       setSaving(false);
     }
   }
 
-  // HU10 — Exportar PDF
+  function handleStopEditing() {
+    if (activeQuoteId) {
+      const currentItemsStr = serializeQuoteItems(items);
+      const hasChanges = currentItemsStr !== initialSnapshot;
+
+      if (hasChanges) {
+        const confirmStop = window.confirm('Tienes cambios sin guardar en esta cotización. ¿Seguro que quieres dejar de editar y vaciar el carrito?');
+        if (!confirmStop) return;
+      }
+    } else if (items.length > 0) {
+       // Comportamiento normal si está creando una nueva (no tiene ID) pero tiene items
+       const confirmStop = window.confirm('Tienes productos en el carrito que no has guardado. ¿Seguro que quieres vaciarlo?');
+       if (!confirmStop) return;
+    }
+    
+    clearQuote();
+  }
+
+  // HU10 — Exportar PDF (Abre pestaña y descarga)
   function handleExportPDF() {
     const date = new Date().toLocaleDateString('es-CL');
+    const safeDate = date.replace(/\//g, '-');
     const rows = items.map(item => {
       const final = getPrecioFinal(item.tienda_seleccionada);
       const total = final * item.cantidad;
@@ -139,8 +116,11 @@ export default function QuotePanel({ onClose, ufValue, showUF, onToggleUF }: Pro
 
     const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
     <title>Cotización ConstructoCompare PRO</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
-      body{font-family:Arial,sans-serif;padding:32px;color:#1E3A5F;}
+      body{font-family:Arial,sans-serif;padding:32px;color:#1E3A5F;background:#f8f9fb;}
+      .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 40px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+      .pdf-content { padding: 20px; }
       h1{color:#1E3A5F;} span.orange{color:#F57C00;}
       table{width:100%;border-collapse:collapse;margin-top:24px;}
       th{background:#1E3A5F;color:#fff;padding:10px 12px;text-align:left;}
@@ -148,29 +128,47 @@ export default function QuotePanel({ onClose, ufValue, showUF, onToggleUF }: Pro
       tr:nth-child(even) td{background:#f8f9fb;}
       .total td{font-weight:bold;background:#FFF3E0;color:#E65100;font-size:1.1em;}
       .footer{margin-top:32px;font-size:.85em;color:#888;}
-      .actions{display:flex;gap:10px;align-items:center;margin:16px 0 8px;}
-      .btn{border:1px solid #e5e7eb;background:#fff;border-radius:8px;padding:8px 12px;font-size:.85rem;cursor:pointer;}
+      .actions{display:flex;gap:10px;align-items:center;margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #eee;}
+      .btn{border:1px solid #e5e7eb;background:#fff;border-radius:8px;padding:10px 16px;font-size:1rem;cursor:pointer;font-weight:bold;}
       .btn.primary{background:#1E3A5F;color:#fff;border-color:#1E3A5F;}
-      .note{font-size:.8rem;color:#6b7280;}
-      @media print {.actions,.note{display:none;} body{padding:16px;}}
+      .btn.primary:hover{background:#152a45;}
     </style></head><body>
-    <h1>ConstructoCompare <span class="orange">PRO</span></h1>
-    <p><strong>Proyecto:</strong> Cotización</p>
-    <p><strong>Fecha:</strong> ${date}</p>
-    <p><strong>UF del día:</strong> ${formatCLP(ufValue)}</p>
-    <div class="actions">
-      <button class="btn primary" onclick="window.print()">Imprimir / Guardar PDF</button>
-      <button class="btn" onclick="window.close()">Cerrar</button>
+    <div class="container">
+      <div class="actions">
+        <button class="btn primary" onclick="descargarPDF()">⬇ Descargar PDF</button>
+        <button class="btn" onclick="window.close()">Cerrar Pestaña</button>
+      </div>
+      
+      <div id="pdf-content" class="pdf-content">
+        <h1>ConstructoCompare <span class="orange">PRO</span></h1>
+        <p><strong>Proyecto:</strong> Cotización</p>
+        <p><strong>Fecha:</strong> ${date}</p>
+        <p><strong>UF del día:</strong> ${formatCLP(ufValue)}</p>
+        
+        <table>
+          <thead><tr><th>Producto</th><th>Tienda</th><th>Cant.</th><th>P. Unitario (CLP/UF)</th><th>Subtotal (CLP/UF)</th></tr></thead>
+          <tbody>${rows}
+            <tr class="total"><td colspan="4">TOTAL</td><td style="text-align:right;">${formatCLP(totalCLP)}<br/><span style="font-size:0.85em;font-weight:normal;color:#E65100">${formatUF(totalCLP, ufValue)}</span></td></tr>
+          </tbody>
+        </table>
+        <div class="footer">Cotización generada por ConstructoCompare PRO<br/>
+        Los precios son referenciales. Verifique disponibilidad en cada tienda.</div>
+      </div>
     </div>
-    <div class="note">Tip: usa "Imprimir" y elige "Guardar como PDF".</div>
-    <table>
-      <thead><tr><th>Producto</th><th>Tienda</th><th>Cant.</th><th>P. Unitario (CLP/UF)</th><th>Subtotal (CLP/UF)</th></tr></thead>
-      <tbody>${rows}
-        <tr class="total"><td colspan="4">TOTAL</td><td>${formatCLP(totalCLP)}<br/>${formatUF(totalCLP, ufValue)}</td></tr>
-      </tbody>
-    </table>
-    <div class="footer">Cotización generada por ConstructoCompare PRO<br/>
-    Los precios son referenciales. Verifique disponibilidad en cada tienda.</div>
+
+    <script>
+      function descargarPDF() {
+        const element = document.getElementById('pdf-content');
+        const opt = {
+          margin:       0.5,
+          filename:     'cotizacion_constructocompare_${safeDate}.pdf',
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  { scale: 2 },
+          jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+        };
+        html2pdf().set(opt).from(element).save();
+      }
+    </script>
     </body></html>`;
 
     const win = window.open('', '_blank');
@@ -191,36 +189,11 @@ export default function QuotePanel({ onClose, ufValue, showUF, onToggleUF }: Pro
           </button>
         </div>
 
-        <div className={s.savedSection}>
-          <button className={s.savedToggle} onClick={() => setSavedOpen(v => !v)}>
-            <span>Mis cotizaciones</span>
-            <span className={s.savedChevron}>{savedOpen ? '▾' : '▸'}</span>
-          </button>
-          {savedOpen && (
-            <div className={s.savedPanel}>
-              <div className={s.savedActions}>
-                <button className={s.newQuoteBtn} onClick={handleNewQuote}>Nueva cotización</button>
-                <button className={s.refreshBtn} onClick={() => setSavedOpen(false)}>Actualizar</button>
-              </div>
-              {loadingSaved && <div className={s.savedEmpty}>Cargando…</div>}
-              {!loadingSaved && savedQuotes.length === 0 && (
-                <div className={s.savedEmpty}>Aún no tienes cotizaciones guardadas.</div>
-              )}
-              {!loadingSaved && savedQuotes.map(quote => (
-                <div key={quote.id_cotizacion} className={s.savedRow}>
-                  <div>
-                    <strong>{quote.nombre_proyecto}</strong>
-                    <span>{new Date(quote.fecha_creacion).toLocaleDateString('es-CL')}</span>
-                  </div>
-                  <button className={s.loadBtn} onClick={() => handleLoadQuote(quote)}>Cargar</button>
-                </div>
-              ))}
-            </div>
-          )}
-          {activeQuoteId && (
-            <div className={s.activeHint}>Editando cotización #{activeQuoteId}</div>
-          )}
-        </div>
+        {activeQuoteId && (
+          <div className={s.activeHint} style={{background:'#E3F2FD', color:'#1565C0', padding:'8px 16px', fontSize:'0.85rem', fontWeight:'bold'}}>
+            Editando cotización cargada desde Perfil
+          </div>
+        )}
 
         {/* Items — HU4 */}
         <div className={s.items}>
@@ -309,7 +282,7 @@ export default function QuotePanel({ onClose, ufValue, showUF, onToggleUF }: Pro
                 <polyline points="17 21 17 13 7 13 7 21"/>
                 <polyline points="7 3 7 8 15 8"/>
               </svg>
-              {saving ? 'Guardando…' : 'Guardar como proyecto'}
+              {saving ? 'Guardando…' : (activeQuoteId ? 'Aplicar cambios' : 'Guardar como proyecto')}
             </button>
 
             {/* HU10 — Exportar PDF */}
@@ -322,7 +295,9 @@ export default function QuotePanel({ onClose, ufValue, showUF, onToggleUF }: Pro
               Exportar PDF
             </button>
 
-            <button className={s.clearBtn} onClick={clearQuote}>Vaciar cotización</button>
+            <button className={s.clearBtn} onClick={handleStopEditing}>
+              {activeQuoteId ? 'Dejar de editar (Cerrar proyecto)' : 'Vaciar cotización'}
+            </button>
           </div>
         )}
       </aside>

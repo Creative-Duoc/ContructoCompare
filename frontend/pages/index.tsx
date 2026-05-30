@@ -62,11 +62,6 @@ export default function LoginPage() {
             <p>Ingresa tus credenciales para continuar</p>
           </div>
 
-          <div className={s.demoBox}>
-            <p>🔑 Cuenta de demostración</p>
-            <code>Email: usuario@demo.cl · Contraseña: demo123</code>
-          </div>
-
           {error && (
             <div className={s.alert}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

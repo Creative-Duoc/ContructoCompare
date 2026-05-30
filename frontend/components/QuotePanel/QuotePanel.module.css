@@ -175,7 +175,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   text-decoration: none;
-  display: inline-block;
+  display: block; /* Modificado: block en vez de inline-block para que ocupe todo el ancho disponible y el ellipsis funcione */
+  width: 100%; /* Forzar a que no se pase del contenedor padre */
 }
 
 .itemName:hover {
