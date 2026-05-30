@@ -5,7 +5,7 @@ import { useQuote } from '../hooks/useQuote';
 import Navbar from '../components/Layout/Navbar';
 import s from '../styles/Proyectos.module.css'; 
 import { useEffect, useState } from 'react';
-import { CotizacionApi, fetchQuotes, searchProducts, Producto, retailerIdToName, QuoteItem, deleteQuote } from '../services/api';
+import { CotizacionApi, fetchQuotes, searchProducts, Producto, retailerIdToName, QuoteItem, deleteQuote, updatePassword, deleteAccount } from '../services/api';
 
 export default function Perfil() {
   const { user, loading, logout } = useAuth();
@@ -15,6 +15,15 @@ export default function Perfil() {
   const [savedQuotes, setSavedQuotes] = useState<CotizacionApi[]>([]);
   const [productMap, setProductMap] = useState<Map<string, Producto>>(new Map());
   const [loadingSaved, setLoadingSaved] = useState(true);
+
+  const [showPassModal, setShowPassModal] = useState(false);
+  const [oldPass, setOldPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [passError, setPassError] = useState('');
+  const [passSuccess, setPassSuccess] = useState('');
+  const [passLoading, setPassLoading] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -69,6 +78,42 @@ export default function Perfil() {
     router.push('/app'); // Redirigir a la app principal para editar
   }
 
+  function openPassModal() {
+    setOldPass(''); setNewPass(''); setConfirmPass('');
+    setPassError(''); setPassSuccess('');
+    setShowPassModal(true);
+  }
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPassError(''); setPassSuccess('');
+    if (newPass !== confirmPass) { setPassError('Las contraseñas nuevas no coinciden.'); return; }
+    setPassLoading(true);
+    try {
+      await updatePassword(oldPass, newPass);
+      setPassSuccess('Contraseña actualizada correctamente.');
+      setOldPass(''); setNewPass(''); setConfirmPass('');
+      setTimeout(() => setShowPassModal(false), 1500);
+    } catch (err: any) {
+      setPassError(err.message || 'Error al actualizar la contraseña.');
+    } finally {
+      setPassLoading(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (!confirm('¿Estás seguro? Esta acción eliminará tu cuenta y todas tus cotizaciones de forma permanente. No se puede deshacer.')) return;
+    setDeletingAccount(true);
+    try {
+      await deleteAccount();
+      logout();
+      router.replace('/');
+    } catch (err: any) {
+      alert(err.message || 'Error al eliminar la cuenta.');
+      setDeletingAccount(false);
+    }
+  }
+
   async function handleDeleteQuote(id: number) {
     if (!confirm('¿Estás seguro de que quieres eliminar este proyecto? Esta acción no se puede deshacer.')) return;
     try {
@@ -85,6 +130,56 @@ export default function Perfil() {
       <Head>
         <title>Mi Perfil | ConstructoCompare PRO</title>
       </Head>
+
+      {/* Modal cambio de contraseña */}
+      {showPassModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div style={{ background: '#fff', borderRadius: '12px', padding: '32px', width: '100%', maxWidth: '420px', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
+            <h2 style={{ margin: '0 0 24px 0', color: 'var(--blue-dark)' }}>Cambiar contraseña</h2>
+            <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '0.9rem' }}>Contraseña actual</label>
+                <input
+                  type="password" value={oldPass} onChange={e => setOldPass(e.target.value)}
+                  required placeholder="••••••••"
+                  style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '1rem', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '0.9rem' }}>Nueva contraseña</label>
+                <input
+                  type="password" value={newPass} onChange={e => setNewPass(e.target.value)}
+                  required placeholder="Mínimo 8 caracteres"
+                  style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '1rem', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '0.9rem' }}>Confirmar nueva contraseña</label>
+                <input
+                  type="password" value={confirmPass} onChange={e => setConfirmPass(e.target.value)}
+                  required placeholder="••••••••"
+                  style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '1rem', boxSizing: 'border-box' }}
+                />
+              </div>
+              {passError && <p style={{ color: '#D32F2F', margin: 0, fontSize: '0.9rem' }}>{passError}</p>}
+              {passSuccess && <p style={{ color: '#2E7D32', margin: 0, fontSize: '0.9rem' }}>{passSuccess}</p>}
+              <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                <button type="button" onClick={() => setShowPassModal(false)}
+                  style={{ flex: 1, padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', background: '#fff', cursor: 'pointer', fontWeight: '600' }}>
+                  Cancelar
+                </button>
+                <button type="submit" disabled={passLoading}
+                  style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '8px', background: 'var(--blue-dark)', color: '#fff', cursor: 'pointer', fontWeight: '600' }}>
+                  {passLoading ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <Navbar ufValue={0} onOpenQuote={() => {
         router.push('/app');
@@ -125,15 +220,15 @@ export default function Perfil() {
             <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '32px 0' }} />
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
-              <button 
-                onClick={() => alert('Funcionalidad de cambio de contraseña en desarrollo.')}
+              <button
+                onClick={openPassModal}
                 style={{ background: '#fff', color: 'var(--gray-700)', border: '1px solid var(--gray-300)', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', transition: 'background 0.2s' }}
                 onMouseOver={e => e.currentTarget.style.background = '#f8f9fb'}
                 onMouseOut={e => e.currentTarget.style.background = '#fff'}
               >
                 Cambiar contraseña
               </button>
-              <button 
+              <button
                 onClick={logout}
                 style={{ background: '#fff', color: 'var(--gray-700)', border: '1px solid var(--gray-300)', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', transition: 'background 0.2s' }}
                 onMouseOver={e => e.currentTarget.style.background = '#f8f9fb'}
@@ -141,17 +236,14 @@ export default function Perfil() {
               >
                 Cerrar sesión
               </button>
-              <button 
-                onClick={() => {
-                  if (confirm('¿Estás seguro de que quieres solicitar la eliminación de tu cuenta? Esta acción es irreversible.')) {
-                    alert('Se ha enviado una solicitud al administrador para eliminar tu cuenta.');
-                  }
-                }}
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deletingAccount}
                 style={{ background: '#fff', color: '#D32F2F', border: '1px solid #EF9A9A', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', transition: 'background 0.2s', marginTop: '8px' }}
                 onMouseOver={e => e.currentTarget.style.background = '#FFEBEE'}
                 onMouseOut={e => e.currentTarget.style.background = '#fff'}
               >
-                Eliminar cuenta
+                {deletingAccount ? 'Eliminando...' : 'Eliminar cuenta'}
               </button>
             </div>
 

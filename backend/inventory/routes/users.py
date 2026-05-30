@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from backend.inventory.database import get_db
+from backend.inventory.models.inventory import Cotizacion, DetalleCotizacion
 from backend.inventory.models.users import Usuario
-from backend.inventory.schemas.users import TokenResponse, UsuarioCreate, UsuarioLogin, UsuarioResponse
+from backend.inventory.schemas.users import PasswordUpdate, TokenResponse, UsuarioCreate, UsuarioLogin, UsuarioResponse
 from backend.inventory.security import (
     ALGORITHM,
     SECRET_KEY,
@@ -96,3 +98,34 @@ async def login_usuario(user_data: UsuarioLogin, db: AsyncSession = Depends(get_
 @router.get("/me", response_model=UsuarioResponse)
 async def obtener_mi_usuario(usuario_actual: Usuario = Depends(get_current_user)):
     return usuario_actual
+
+
+@router.put("/password", status_code=status.HTTP_200_OK)
+async def cambiar_password(
+    datos: PasswordUpdate,
+    usuario_actual: Usuario = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not verify_password(datos.contrasena_actual, usuario_actual.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña actual es incorrecta.",
+        )
+
+    usuario_actual.password_hash = get_password_hash(datos.nueva_contrasena)
+    db.add(usuario_actual)
+    await db.commit()
+    return {"message": "Contraseña actualizada exitosamente."}
+
+
+@router.delete("/me", status_code=status.HTTP_200_OK)
+async def eliminar_cuenta(
+    usuario_actual: Usuario = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    subq = select(Cotizacion.id_cotizacion).where(Cotizacion.id_usuario == usuario_actual.id_usuario)
+    await db.execute(delete(DetalleCotizacion).where(DetalleCotizacion.id_cotizacion.in_(subq)))
+    await db.execute(delete(Cotizacion).where(Cotizacion.id_usuario == usuario_actual.id_usuario))
+    await db.delete(usuario_actual)
+    await db.commit()
+    return {"message": "Cuenta eliminada exitosamente."}
