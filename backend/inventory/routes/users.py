@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy import delete
@@ -16,6 +16,8 @@ from backend.inventory.security import (
     needs_rehash,
     verify_password,
 )
+
+from backend.inventory.main import limiter
 
 router = APIRouter(prefix="/api/v1/users", tags=["User Management"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/users/login")
@@ -73,7 +75,8 @@ async def registrar_usuario(user_data: UsuarioCreate, db: AsyncSession = Depends
     return nuevo_usuario
 
 @router.post("/login", response_model=TokenResponse)
-async def login_usuario(user_data: UsuarioLogin, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login_usuario(request: Request, user_data: UsuarioLogin, db: AsyncSession = Depends(get_db)):
     query = select(Usuario).where(Usuario.correo_electronico == user_data.correo_electronico)
     result = await db.execute(query)
     usuario = result.scalars().first()
