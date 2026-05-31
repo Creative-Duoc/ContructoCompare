@@ -2,17 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
-from database import get_db
-from models.inventory import ProductoMaestro, PrecioRetailer, Categoria, Retailer, Marca, UnidadMedida
-from schemas.inventory import (
+from backend.inventory.database import get_db
+from backend.inventory.models.inventory import ProductoMaestro, PrecioRetailer, Categoria, Retailer, Marca, UnidadMedida
+from backend.inventory.schemas.inventory import (
     PrecioScraperCreate, 
     PrecioResponse, 
     ProductoGeneralResponse,
 )
-from models.inventory import Cotizacion, DetalleCotizacion
-from schemas.inventory import CotizacionCreate, CotizacionResponse
-from routes.users import get_current_user
-from models.users import Usuario
+from backend.inventory.models.inventory import Cotizacion, DetalleCotizacion
+from backend.inventory.schemas.inventory import CotizacionCreate, CotizacionResponse
+from backend.inventory.routes.users import get_current_user
+from backend.inventory.models.users import Usuario
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select
 from typing import List

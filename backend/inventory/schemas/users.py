@@ -56,3 +56,7 @@ class UsuarioResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class UsuarioUpdate(BaseModel):
+    nombre_completo: str
+    correo_electronico: EmailStr

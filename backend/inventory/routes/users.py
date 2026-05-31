@@ -7,7 +7,7 @@ from sqlalchemy.future import select
 from backend.inventory.database import get_db
 from backend.inventory.models.inventory import Cotizacion, DetalleCotizacion
 from backend.inventory.models.users import Usuario
-from backend.inventory.schemas.users import PasswordUpdate, TokenResponse, UsuarioCreate, UsuarioLogin, UsuarioResponse
+from backend.inventory.schemas.users import PasswordUpdate, TokenResponse, UsuarioCreate, UsuarioLogin, UsuarioResponse,UsuarioUpdate
 from backend.inventory.security import (
     ALGORITHM,
     SECRET_KEY,
@@ -129,3 +129,32 @@ async def eliminar_cuenta(
     await db.delete(usuario_actual)
     await db.commit()
     return {"message": "Cuenta eliminada exitosamente."}
+
+@router.put("/profile", response_model=UsuarioResponse)
+async def actualizar_perfil(
+    datos: UsuarioUpdate,
+    usuario_actual: Usuario = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # 1. Verificar si el nuevo correo ya está tomado por otro usuario
+    if datos.correo_electronico != usuario_actual.correo_electronico:
+        query = select(Usuario).where(Usuario.correo_electronico == datos.correo_electronico)
+        result = await db.execute(query)
+        usuario_existente = result.scalars().first()
+        
+        if usuario_existente:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El nuevo correo electrónico ya está registrado."
+            )
+
+    # 2. Actualizar los campos
+    usuario_actual.nombre_completo = datos.nombre_completo
+    usuario_actual.correo_electronico = datos.correo_electronico
+
+    # 3. Persistir cambios
+    db.add(usuario_actual)
+    await db.commit()
+    await db.refresh(usuario_actual)
+    
+    return usuario_actual
