@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import StreamingResponse
 from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-
+from io import BytesIO
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
 from backend.inventory.database import get_db
 from backend.inventory.models.inventory import Cotizacion, DetalleCotizacion
 from backend.inventory.models.users import Usuario
@@ -13,13 +16,14 @@ from backend.inventory.security import ALGORITHM, SECRET_KEY
 
 router = APIRouter(prefix="/api/v1/cotizaciones", tags=["Quotes"])
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/users/login")
+security = HTTPBearer()
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> Usuario:
+    token = credentials.credentials
     credenciales_invalidas = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="No se pudo validar el token.",
@@ -153,3 +157,37 @@ async def eliminar_cotizacion(
     await db.delete(cotizacion)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.get("/{id_cotizacion}/export-pdf")
+async def exportar_pdf(
+    id_cotizacion: int,
+    db: AsyncSession = Depends(get_db),
+    usuario_actual: Usuario = Depends(get_current_user),
+):
+    # 1. Obtenemos la cotización (reutilizando la lógica de validación)
+    cotizacion = await _get_user_cotizacion(id_cotizacion, usuario_actual, db)
+
+    # 2. Creamos el PDF en memoria
+    buffer = BytesIO()
+    p = canvas.Canvas(buffer, pagesize=letter)
+    
+    # Diseño básico del PDF
+    p.drawString(100, 750, f"Cotización: {cotizacion.nombre_proyecto}")
+    p.drawString(100, 735, f"Usuario: {usuario_actual.correo_electronico}")
+    p.drawString(100, 700, "Detalle de materiales:")
+    
+    y = 680
+    for det in cotizacion.detalles:
+        p.drawString(120, y, f"- Producto ID: {det.id_producto_maestro} | Cant: {det.cantidad}")
+        y -= 20
+        
+    p.showPage()
+    p.save()
+    
+    # 3. Preparamos el stream para la respuesta
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=cotizacion_{id_cotizacion}.pdf"}
+    )

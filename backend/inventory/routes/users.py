@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,13 +18,14 @@ from backend.inventory.security import (
 )
 
 router = APIRouter(prefix="/api/v1/users", tags=["User Management"])
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/users/login")
+security = HTTPBearer()
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> Usuario:
+    token = credentials.credentials
     credenciales_invalidas = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="No se pudo validar el token.",
@@ -71,7 +72,6 @@ async def registrar_usuario(user_data: UsuarioCreate, db: AsyncSession = Depends
     await db.refresh(nuevo_usuario)
     
     return nuevo_usuario
-
 @router.post("/login", response_model=TokenResponse)
 async def login_usuario(user_data: UsuarioLogin, db: AsyncSession = Depends(get_db)):
     query = select(Usuario).where(Usuario.correo_electronico == user_data.correo_electronico)
@@ -92,8 +92,10 @@ async def login_usuario(user_data: UsuarioLogin, db: AsyncSession = Depends(get_
         await db.commit()
 
     access_token = create_access_token(subject=str(usuario.id_usuario))
-    return TokenResponse(access_token=access_token)
-
+    return TokenResponse(
+    access_token=access_token,
+    token_type="bearer"
+)
 
 @router.get("/me", response_model=UsuarioResponse)
 async def obtener_mi_usuario(usuario_actual: Usuario = Depends(get_current_user)):
