@@ -1,18 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import StreamingResponse
 from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from io import BytesIO
 from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
 from backend.inventory.database import get_db
 from backend.inventory.models.inventory import Cotizacion, DetalleCotizacion
 from backend.inventory.models.users import Usuario
 from backend.inventory.schemas.inventory import CotizacionCreate, CotizacionResponse, CotizacionUpdate
 from backend.inventory.security import ALGORITHM, SECRET_KEY
+
 
 router = APIRouter(prefix="/api/v1/cotizaciones", tags=["Quotes"])
 
@@ -36,17 +35,27 @@ async def get_current_user(
         if subject is None:
             raise credenciales_invalidas
         user_id = int(subject)
-    except (JWTError, ValueError):
+    except JWTError as e:
+        # AQUÍ ESTÁ EL SECRETO: Veremos por qué falla
+        print(f"❌ ERROR JWT DETALLADO: {e}") 
         raise credenciales_invalidas
-
+    except ValueError as e:
+        print(f"❌ ERROR Conversión ID: {e}")
+        raise credenciales_invalidas
+    # DEBUG: Vamos a ver qué trae la base de datos
+    print(f"DEBUG: Buscando usuario con ID: {user_id}")
+    
     result = await db.execute(select(Usuario).where(Usuario.id_usuario == user_id))
     usuario_actual = result.scalars().first()
 
+    # DEBUG: ¿Qué devolvió?
+    print(f"DEBUG: Usuario encontrado: {usuario_actual}")
+
     if not usuario_actual:
+        print("❌ ERROR: Usuario no existe en DB, lanzando 404")
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
 
     return usuario_actual
-
 
 async def _get_user_cotizacion(
     cotizacion_id: int,
@@ -68,7 +77,7 @@ async def _get_user_cotizacion(
     return cotizacion
 
 
-@router.post("", response_model=CotizacionResponse)
+@router.post("/", response_model=CotizacionResponse)
 async def crear_cotizacion(
     data: CotizacionCreate,
     db: AsyncSession = Depends(get_db),
@@ -158,36 +167,13 @@ async def eliminar_cotizacion(
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-@router.get("/{id_cotizacion}/export-pdf")
-async def exportar_pdf(
+#exportación del pdf
+
+@router.get("/{id_cotizacion}", response_model=CotizacionResponse)
+async def obtener_cotizacion(
     id_cotizacion: int,
     db: AsyncSession = Depends(get_db),
     usuario_actual: Usuario = Depends(get_current_user),
 ):
-    # 1. Obtenemos la cotización (reutilizando la lógica de validación)
     cotizacion = await _get_user_cotizacion(id_cotizacion, usuario_actual, db)
-
-    # 2. Creamos el PDF en memoria
-    buffer = BytesIO()
-    p = canvas.Canvas(buffer, pagesize=letter)
-    
-    # Diseño básico del PDF
-    p.drawString(100, 750, f"Cotización: {cotizacion.nombre_proyecto}")
-    p.drawString(100, 735, f"Usuario: {usuario_actual.correo_electronico}")
-    p.drawString(100, 700, "Detalle de materiales:")
-    
-    y = 680
-    for det in cotizacion.detalles:
-        p.drawString(120, y, f"- Producto ID: {det.id_producto_maestro} | Cant: {det.cantidad}")
-        y -= 20
-        
-    p.showPage()
-    p.save()
-    
-    # 3. Preparamos el stream para la respuesta
-    buffer.seek(0)
-    return StreamingResponse(
-        buffer,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=cotizacion_{id_cotizacion}.pdf"}
-    )
+    return cotizacion
