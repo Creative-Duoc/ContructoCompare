@@ -4,8 +4,6 @@ from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from reportlab.pdfgen import canvas
-from reportlab.lib import colors
 from backend.inventory.database import get_db
 from backend.inventory.models.inventory import Cotizacion, DetalleCotizacion
 from backend.inventory.models.users import Usuario
@@ -35,24 +33,13 @@ async def get_current_user(
         if subject is None:
             raise credenciales_invalidas
         user_id = int(subject)
-    except JWTError as e:
-        # AQUÍ ESTÁ EL SECRETO: Veremos por qué falla
-        print(f"❌ ERROR JWT DETALLADO: {e}") 
+    except (JWTError, ValueError):
         raise credenciales_invalidas
-    except ValueError as e:
-        print(f"❌ ERROR Conversión ID: {e}")
-        raise credenciales_invalidas
-    # DEBUG: Vamos a ver qué trae la base de datos
-    print(f"DEBUG: Buscando usuario con ID: {user_id}")
-    
+
     result = await db.execute(select(Usuario).where(Usuario.id_usuario == user_id))
     usuario_actual = result.scalars().first()
 
-    # DEBUG: ¿Qué devolvió?
-    print(f"DEBUG: Usuario encontrado: {usuario_actual}")
-
     if not usuario_actual:
-        print("❌ ERROR: Usuario no existe en DB, lanzando 404")
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
 
     return usuario_actual
@@ -77,7 +64,7 @@ async def _get_user_cotizacion(
     return cotizacion
 
 
-@router.post("/", response_model=CotizacionResponse)
+@router.post("", response_model=CotizacionResponse)
 async def crear_cotizacion(
     data: CotizacionCreate,
     db: AsyncSession = Depends(get_db),
@@ -166,14 +153,3 @@ async def eliminar_cotizacion(
     await db.delete(cotizacion)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-#exportación del pdf
-
-@router.get("/{id_cotizacion}", response_model=CotizacionResponse)
-async def obtener_cotizacion(
-    id_cotizacion: int,
-    db: AsyncSession = Depends(get_db),
-    usuario_actual: Usuario = Depends(get_current_user),
-):
-    cotizacion = await _get_user_cotizacion(id_cotizacion, usuario_actual, db)
-    return cotizacion
