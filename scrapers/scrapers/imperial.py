@@ -13,6 +13,20 @@ from core.normalizer import clean_text, normalize_name
 from scrapers.base_scraper import BaseStoreScraper, ProductRecord
 from scrapers.base_scraper import log_failed_url
 
+_PRODUCT_TYPE_WORDS = frozenset({
+    "cemento", "tornillo", "clavo", "pintura", "fierro", "tubo", "pvc",
+    "madera", "placa", "ladrillo", "mortero", "adhesivo", "sellador",
+    "taladro", "sierra", "disco", "electrodo", "cable", "tuberia", "malla",
+    "bisagra", "cerradura", "llave", "griferia", "teja", "panel", "perfil",
+    "angulo", "canal", "lija", "brocha", "rodillo", "impermeabilizante",
+    "hormigon", "arena", "piedra", "cal", "yeso", "ceramica", "porcelanato",
+    "grifo", "cinta", "espuma", "silicona", "foco", "lampara", "interruptor",
+    "enchufe", "breaker", "tablero", "varilla", "alambre", "candado", "perno",
+    "tuerca", "arandela", "remache", "anclaje", "taco", "fijacion", "producto",
+    "pincel", "impermeabilizante", "cañeria", "union", "codo", "reduccion",
+    "soporte", "grapas", "grapa", "taco", "peldaño", "escalera",
+})
+
 
 class ImperialScraper(BaseStoreScraper):
     store_name = "imperial"
@@ -24,25 +38,15 @@ class ImperialScraper(BaseStoreScraper):
             "https://www.imperial.cl/sitemap.xml",
         )
         self.selectors = {
-            "listing_link": [
-                "a[href*='/product/']",
-                "article a[href*='/product/']",
-                "main a[href*='/product/']",
-            ],
-            "listing_name": [
-                "h1",
-                "[itemprop='name']",
-                ".product-name",
-            ],
-            "listing_image": [
-                "img.osf__sc-1d18s5c-2",
-                "img.osf__sc-p8pmzu-5",
-                "img[src*='/products/']",
-                "img.product-image",
-                ".product-image img",
-                "img[itemprop='image']",
-                "img",
-            ],
+            "listing_card":         "div.osf__sc-1d18s5c-0",
+            "listing_url":          "a.osf__sc-1d18s5c-3[href*='/product/']",
+            "listing_name":         "h2.osf__sc-1d18s5c-4",
+            "listing_brand":        "small.osf__sc-1d18s5c-5",
+            "listing_sku":          "p.osf__sc-1d18s5c-13 strong",
+            "listing_image":        "img.osf__sc-1d18s5c-2",
+            "listing_offer_price":  "p.bqUKNq",
+            "listing_normal_price": "p.fJeIUt",
+            "listing_unavailable":  "button[disabled]",
         }
 
     @staticmethod
@@ -172,8 +176,11 @@ class ImperialScraper(BaseStoreScraper):
     def _extract_brand_from_name(name: str) -> str:
         if not name:
             return ""
-        first = clean_text(name).split(" ")[0].strip()
-        if len(first) <= 1:
+        parts = clean_text(name).split()
+        if not parts:
+            return ""
+        first = parts[0].strip()
+        if len(first) <= 1 or first.lower() in _PRODUCT_TYPE_WORDS:
             return ""
         return first
 
@@ -197,7 +204,7 @@ class ImperialScraper(BaseStoreScraper):
         if not text:
             return prices
 
-        normalized = clean_text(text).replace("\u00b2", "2").replace("\u00b3", "3")
+        normalized = clean_text(text).replace("²", "2").replace("³", "3")
 
         normal_match = re.search(r"\bNormal\b\s*:?\s*\$\s*([\d\.,]+)", normalized, flags=re.IGNORECASE)
         if normal_match:
@@ -255,9 +262,6 @@ class ImperialScraper(BaseStoreScraper):
                 filtered.append(amount)
             remaining = filtered
 
-        # Imperial frequently renders current price first, then "Normal $...".
-        # If both exist and no explicit internet/oferta label is present,
-        # map the extra lower product-level amount as oferta.
         if (
             prices["precio_oferta"] is None
             and prices["precio_internet"] is None
@@ -281,86 +285,30 @@ class ImperialScraper(BaseStoreScraper):
 
         return prices
 
-    async def _get_container_text(self, link: Any) -> str:
-        try:
-            container_text = await link.evaluate(
-                """
-                (el) => {
-                    const container =
-                        el.closest("li") ||
-                        el.closest("article") ||
-                        el.closest(".product") ||
-                        el.closest(".item") ||
-                        el.closest("div");
-                    return container ? container.innerText : el.innerText;
-                }
-                """
-            )
-            return clean_text(container_text or "")
-        except PlaywrightError:
-            return ""
+    async def extract_prices(self, card: Any) -> dict[str, int | str | None]:
+        prices: dict[str, int | str | None] = {
+            "precio_tarjeta": None,
+            "precio_internet": None,
+            "precio_oferta": None,
+            "precio_normal": None,
+            "precio_unitario": None,
+            "unidad_medida": None,
+            "precio_unitario_fuente": None,
+        }
+        offer_text = await self.first_text(card, [self.selectors["listing_offer_price"]])
+        if offer_text:
+            prices["precio_oferta"] = self.parse_price(offer_text)
 
-    async def _enrich_from_pdp(self, page: Any, product_url: str, current: dict[str, Any]) -> dict[str, Any]:
-        loaded = await self.goto_safe(page, product_url)
-        if not loaded:
-            return current
+        normal_text = await self.first_text(card, [self.selectors["listing_normal_price"]])
+        if normal_text:
+            prices["precio_normal"] = self.parse_price(normal_text)
 
-        pdp_text = ""
-        try:
-            await page.wait_for_selector("body", timeout=12_000)
-            pdp_text = clean_text(await page.inner_text("body"))
-        except PlaywrightError:
-            pdp_text = ""
+        # Si sólo hay un precio visible, promover oferta → normal
+        if prices["precio_normal"] is None and prices["precio_oferta"] is not None:
+            prices["precio_normal"] = prices["precio_oferta"]
+            prices["precio_oferta"] = None
 
-        pdp_name = await self.first_text(page, self.selectors["listing_name"])
-        if not pdp_name and pdp_text:
-            h1_guess = re.search(r"##\s+(.+?)\s+SKU:", pdp_text)
-            if h1_guess:
-                pdp_name = clean_text(h1_guess.group(1))
-
-        pdp_sku = self._extract_sku_from_text(pdp_text) if pdp_text else ""
-        pdp_prices = self.extract_prices_from_text(pdp_text)
-        
-        pdp_img_url = await self.extract_image_url(page, self.selectors["listing_image"])
-
-        pdp_brand = ""
-        if pdp_text:
-            brand_match = re.search(
-                r"Marca\s*([A-Za-z0-9\-\s]{2,40}?)\s*(?:Largo|Alto|Ancho|Modelo|Unidad|Peso|Servicios|Linea|Color|$)",
-                pdp_text,
-                flags=re.IGNORECASE,
-            )
-            if brand_match:
-                pdp_brand = clean_text(brand_match.group(1))
-        if not pdp_brand:
-            pdp_brand = self._extract_brand_from_name(pdp_name)
-
-        merged = dict(current)
-        if pdp_name:
-            merged["name"] = self._extract_name_from_text(pdp_name)
-        if pdp_brand:
-            merged["brand"] = pdp_brand
-        if pdp_sku:
-            merged["sku_store"] = pdp_sku
-        if pdp_img_url:
-            merged["image_url"] = urljoin(self.base_url, pdp_img_url)
-
-        for key in [
-            "precio_normal",
-            "precio_internet",
-            "precio_oferta",
-            "precio_tarjeta",
-            "precio_unitario",
-            "unidad_medida",
-            "precio_unitario_fuente",
-        ]:
-            if merged.get(key) is None and pdp_prices.get(key) is not None:
-                merged[key] = pdp_prices[key]
-
-        if not merged.get("sku_store"):
-            merged["sku_store"] = self.extract_sku_from_url(product_url)
-
-        return merged
+        return prices
 
     async def _extract_child_category_urls(self, page: Any, current_url: str) -> list[str]:
         try:
@@ -388,22 +336,16 @@ class ImperialScraper(BaseStoreScraper):
             result.append(candidate)
         return result
 
-    async def _find_listing_links(self, page: Any, category_url: str) -> list[Any]:
-        any_link_selector = ", ".join(self.selectors["listing_link"])
+    async def _find_listing_cards(self, page: Any, category_url: str) -> list[Any]:
         try:
-            await page.wait_for_selector(any_link_selector, timeout=6_000)
+            await page.wait_for_selector(self.selectors["listing_card"], timeout=6_000)
         except PlaywrightTimeoutError:
             return []
-
-        for link_selector in self.selectors["listing_link"]:
-            try:
-                links = await page.query_selector_all(link_selector)
-                if links:
-                    return links
-            except PlaywrightError as exc:
-                log_failed_url(self.logger, category_url, f"selector error: {exc}")
-
-        return []
+        try:
+            return await page.query_selector_all(self.selectors["listing_card"])
+        except PlaywrightError as exc:
+            log_failed_url(self.logger, category_url, f"selector error: {exc}")
+            return []
 
     async def scrape(
         self,
@@ -411,7 +353,6 @@ class ImperialScraper(BaseStoreScraper):
         max_products: int = 0,
         max_category_urls: int = 0,
         headless: bool = True,
-        fallback_pdp: bool = True,
         category_workers: int = 3,
     ) -> list[ProductRecord]:
         self.category_hints = {}
@@ -442,7 +383,6 @@ class ImperialScraper(BaseStoreScraper):
             async def worker() -> None:
                 nonlocal processed_categories
                 page = await context.new_page()
-                pdp_page = await context.new_page()
 
                 try:
                     while True:
@@ -471,9 +411,9 @@ class ImperialScraper(BaseStoreScraper):
                             if not loaded:
                                 continue
 
-                            links = await self._find_listing_links(page, category_url)
+                            cards = await self._find_listing_cards(page, category_url)
 
-                            if not links:
+                            if not cards:
                                 child_categories = await self._extract_child_category_urls(page, category_url)
                                 new_children = 0
                                 async with state_lock:
@@ -492,22 +432,26 @@ class ImperialScraper(BaseStoreScraper):
                                     )
                                     continue
 
-                                log_failed_url(self.logger, category_url, "no product links found")
+                                log_failed_url(self.logger, category_url, "no product cards found")
                                 continue
 
                             for _ in range(2):
                                 await page.mouse.wheel(0, 1800)
                                 await page.wait_for_timeout(300)
 
-                            refreshed = await page.query_selector_all(self.selectors["listing_link"][0])
+                            refreshed = await page.query_selector_all(self.selectors["listing_card"])
                             if refreshed:
-                                links = refreshed
+                                cards = refreshed
 
-                            for link in links:
+                            for card in cards:
                                 if stop_scraping.is_set():
                                     break
                                 try:
-                                    raw_url = await link.get_attribute("href")
+                                    link_el = await card.query_selector(self.selectors["listing_url"])
+                                    if not link_el:
+                                        continue
+
+                                    raw_url = await link_el.get_attribute("href")
                                     if not raw_url:
                                         continue
 
@@ -518,95 +462,60 @@ class ImperialScraper(BaseStoreScraper):
                                     if not self._is_product_url(product_url):
                                         continue
 
-                                    link_text = clean_text(await link.inner_text())
-                                    if not link_text:
-                                        image = await link.query_selector("img[alt]")
-                                        if image:
-                                            link_text = clean_text(await image.get_attribute("alt") or "")
-
-                                    container_text = await self._get_container_text(link)
-                                    combined_text = clean_text(f"{link_text} {container_text}")
-
-                                    name = self._extract_name_from_text(link_text)
-                                    if not name and container_text:
-                                        name = self._extract_name_from_text(container_text)
-
-                                    prices = self.extract_prices_from_text(combined_text)
-                                    sku_store = (
-                                        self._extract_sku_from_text(container_text)
-                                        or self.extract_sku_from_url(product_url)
-                                    )
-                                    brand = self._extract_brand_from_name(name)
-                                    
-                                    image_url = await self.extract_image_url(link, self.selectors["listing_image"])
-
-                                    current: dict[str, Any] = {
-                                        "name": name,
-                                        "brand": brand,
-                                        "sku_store": sku_store,
-                                        "precio_normal": prices["precio_normal"],
-                                        "precio_internet": prices["precio_internet"],
-                                        "precio_oferta": prices["precio_oferta"],
-                                        "precio_tarjeta": prices["precio_tarjeta"],
-                                        "precio_unitario": prices["precio_unitario"],
-                                        "unidad_medida": prices["unidad_medida"],
-                                        "precio_unitario_fuente": prices["precio_unitario_fuente"],
-                                        "image_url": image_url,
-                                    }
-
-                                    has_any_price = any(
-                                        [
-                                            current["precio_normal"],
-                                            current["precio_internet"],
-                                            current["precio_oferta"],
-                                            current["precio_tarjeta"],
-                                            current["precio_unitario"],
-                                        ]
-                                    )
-
-                                    needs_pdp = fallback_pdp and (
-                                        not current["name"]
-                                        or not current["sku_store"]
-                                        or not has_any_price
-                                        or not current["image_url"]
-                                    )
-
-                                    if needs_pdp:
-                                        current = await self._enrich_from_pdp(pdp_page, product_url, current)
-
-                                    if (
-                                        current["precio_normal"] is None
-                                        and current["precio_internet"] is None
-                                        and current["precio_oferta"] is None
-                                        and current["precio_tarjeta"] is None
-                                        and current["precio_unitario"] is None
-                                    ):
+                                    unavailable_btn = await card.query_selector(self.selectors["listing_unavailable"])
+                                    if unavailable_btn:
                                         continue
 
-                                    if not current["name"]:
+                                    name_raw = await self.first_text(card, [self.selectors["listing_name"]])
+                                    name = self._extract_name_from_text(name_raw) if name_raw else ""
+
+                                    brand = clean_text(
+                                        await self.first_text(card, [self.selectors["listing_brand"]]) or ""
+                                    )
+                                    if not brand:
+                                        brand = self._extract_brand_from_name(name)
+
+                                    sku_raw = clean_text(
+                                        await self.first_text(card, [self.selectors["listing_sku"]]) or ""
+                                    )
+                                    sku_store = sku_raw or self.extract_sku_from_url(product_url)
+
+                                    prices = await self.extract_prices(card)
+                                    if not any([
+                                        prices["precio_normal"],
+                                        prices["precio_internet"],
+                                        prices["precio_oferta"],
+                                        prices["precio_tarjeta"],
+                                        prices["precio_unitario"],
+                                    ]):
+                                        continue
+
+                                    if not name:
                                         slug = (
                                             unquote(urlparse(product_url).path)
                                             .split("/product/", 1)[0]
                                             .split("/")[-1]
                                         )
-                                        current["name"] = clean_text(slug.replace("-", " "))
-                                    if not current["sku_store"]:
-                                        current["sku_store"] = self.extract_sku_from_url(product_url)
+                                        name = clean_text(slug.replace("-", " "))
+
+                                    image_url = await self.extract_image_url(
+                                        card, [self.selectors["listing_image"]]
+                                    )
 
                                     record = ProductRecord(
                                         store=self.store_name,
-                                        name=current["name"],
-                                        brand=current["brand"] or "",
-                                        sku_store=current["sku_store"] or "",
+                                        name=name,
+                                        brand=brand,
+                                        sku_store=sku_store,
                                         product_url=product_url,
-                                        precio_normal=current["precio_normal"],
-                                        precio_internet=current["precio_internet"],
-                                        precio_oferta=current["precio_oferta"],
-                                        precio_tarjeta=current["precio_tarjeta"],
-                                        precio_unitario=current["precio_unitario"],
-                                        unidad_medida=current["unidad_medida"],
-                                        precio_unitario_fuente=current["precio_unitario_fuente"],
-                                        image_url=current["image_url"],
+                                        precio_normal=prices["precio_normal"],
+                                        precio_internet=prices["precio_internet"],
+                                        precio_oferta=prices["precio_oferta"],
+                                        precio_tarjeta=prices["precio_tarjeta"],
+                                        precio_unitario=prices["precio_unitario"],
+                                        unidad_medida=prices["unidad_medida"],
+                                        precio_unitario_fuente=prices["precio_unitario_fuente"],
+                                        image_url=image_url,
                                     )
 
                                     async with state_lock:
@@ -629,11 +538,10 @@ class ImperialScraper(BaseStoreScraper):
                         finally:
                             category_queue.task_done()
                 finally:
-                    for closer in (pdp_page.close, page.close):
-                        try:
-                            await closer()
-                        except PlaywrightError:
-                            continue
+                    try:
+                        await page.close()
+                    except PlaywrightError:
+                        pass
 
             try:
                 workers_count = min(safe_workers, max(1, len(seen_categories)))
@@ -656,3 +564,76 @@ class ImperialScraper(BaseStoreScraper):
 
         self.logger.info("Imperial products extracted: %d", len(products))
         return products
+
+    async def _extract_pdp_prices(self, page: Any) -> dict:
+        text = ""
+        for sel in ["div[class*='osf__sc-1kvhwj2']", "main", "body"]:
+            try:
+                el = await page.query_selector(sel)
+                if el:
+                    text = clean_text(await el.inner_text())
+                    break
+            except PlaywrightError:
+                pass
+        return self.extract_prices_from_text(text)
+
+    async def scrape_pdp_batch(
+        self,
+        products: list[dict],
+        headless: bool = True,
+        workers: int = 4,
+    ) -> list[dict]:
+        results: list[dict] = []
+        queue: asyncio.Queue = asyncio.Queue()
+        for product in products:
+            queue.put_nowait(product)
+
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(headless=headless)
+            context = await browser.new_context(user_agent=self.user_agent, locale="es-CL")
+            lock = asyncio.Lock()
+
+            async def worker() -> None:
+                page = await context.new_page()
+                try:
+                    while True:
+                        try:
+                            product = queue.get_nowait()
+                        except asyncio.QueueEmpty:
+                            break
+                        url = product.get("product_url", "")
+                        try:
+                            loaded = await self.goto_safe(page, url)
+                            if not loaded:
+                                result = {**product, "disponibilidad": False}
+                            else:
+                                prices = await self._extract_pdp_prices(page)
+                                has_price = any(
+                                    prices.get(k) for k in
+                                    ["precio_normal", "precio_internet", "precio_oferta",
+                                     "precio_tarjeta", "precio_unitario"]
+                                )
+                                result = {**product, **prices, "disponibilidad": has_price}
+                        except Exception as exc:
+                            self.logger.error("PDP error | url=%s | %s", url, exc)
+                            result = {**product, "disponibilidad": False}
+                        async with lock:
+                            results.append(result)
+                        queue.task_done()
+                finally:
+                    try:
+                        await page.close()
+                    except PlaywrightError:
+                        pass
+
+            worker_count = min(max(1, workers), len(products))
+            tasks = [asyncio.create_task(worker()) for _ in range(worker_count)]
+            await asyncio.gather(*tasks)
+            for closer in (context.close, browser.close):
+                try:
+                    await closer()
+                except PlaywrightError:
+                    pass
+
+        self.logger.info("Imperial PDP batch: %d processed", len(results))
+        return results

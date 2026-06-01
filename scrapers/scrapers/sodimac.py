@@ -268,3 +268,86 @@ class SodimacScraper(BaseStoreScraper):
 
         self.logger.info("Sodimac products extracted: %d", len(products))
         return products
+
+    async def _extract_pdp_prices(self, page: Any) -> dict:
+        prices: dict = {
+            "precio_tarjeta": None, "precio_internet": None,
+            "precio_oferta": None, "precio_normal": None,
+            "precio_unitario": None, "unidad_medida": None,
+            "precio_unitario_fuente": None,
+        }
+        for attr, key in [
+            ("data-cmr-price",      "precio_tarjeta"),
+            ("data-internet-price", "precio_internet"),
+            ("data-event-price",    "precio_oferta"),
+            ("data-normal-price",   "precio_normal"),
+        ]:
+            raw = await self.first_attr(page, [f"li[{attr}]"], attr)
+            prices[key] = self.parse_price(raw)
+
+        unit_text = await self.first_text(page, [
+            "div[class*='pumPrice']",
+            "li[data-testid='price-per-unit']",
+            "[class*='price-per-unit']",
+        ])
+        unit_price, unit = self.extract_unit_price_from_text(unit_text)
+        if unit_price is not None and unit is not None:
+            prices["precio_unitario"]        = unit_price
+            prices["unidad_medida"]          = unit
+            prices["precio_unitario_fuente"] = "pdp"
+        return prices
+
+    async def scrape_pdp_batch(
+        self,
+        products: list[dict],
+        headless: bool = True,
+        workers: int = 4,
+    ) -> list[dict]:
+        results: list[dict] = []
+        queue: asyncio.Queue = asyncio.Queue()
+        for product in products:
+            queue.put_nowait(product)
+
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(headless=headless)
+            context = await browser.new_context(user_agent=self.user_agent, locale="es-CL")
+            lock = asyncio.Lock()
+
+            async def worker() -> None:
+                page = await context.new_page()
+                try:
+                    while True:
+                        try:
+                            product = queue.get_nowait()
+                        except asyncio.QueueEmpty:
+                            break
+                        url = product.get("product_url", "")
+                        try:
+                            loaded = await self.goto_safe(page, url)
+                            if not loaded:
+                                result = {**product, "disponibilidad": False}
+                            else:
+                                prices = await self._extract_pdp_prices(page)
+                                has_price = any(
+                                    prices.get(k) for k in
+                                    ["precio_normal", "precio_internet", "precio_oferta",
+                                     "precio_tarjeta", "precio_unitario"]
+                                )
+                                result = {**product, **prices, "disponibilidad": has_price}
+                        except Exception as exc:
+                            self.logger.error("PDP error | url=%s | %s", url, exc)
+                            result = {**product, "disponibilidad": False}
+                        async with lock:
+                            results.append(result)
+                        queue.task_done()
+                finally:
+                    await page.close()
+
+            worker_count = min(max(1, workers), len(products))
+            tasks = [asyncio.create_task(worker()) for _ in range(worker_count)]
+            await asyncio.gather(*tasks)
+            await context.close()
+            await browser.close()
+
+        self.logger.info("Sodimac PDP batch: %d processed", len(results))
+        return results
