@@ -26,7 +26,23 @@ from scrapers.sodimac import SodimacScraper
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 BRONZE_DIR = DATA_DIR / "bronze"
-DEFAULT_QUERIES = ["cemento", "taladro", "pintura", "fierro", "pvc"]
+DEFAULT_QUERIES = [
+    "herramienta",   # taladros, sierras, lijadoras, destornilladores, etc.
+    "pintura",       # pinturas, esmaltes, barnices, selladores
+    "cemento",       # cemento, hormigon, mortero, estuco
+    "madera",        # tableros, molduras, vigas, parquet
+    "ceramica",      # ceramica, porcelanato, baldosa
+    "fierro",        # fierro, acero, barra, perfil metalico
+    "tubo",          # tuberias, canerias, pvc, cobre
+    "cable",         # cables, conductores, electricidad
+    "tornillo",      # tornillos, fijaciones, anclajes, tarugo
+    "puerta",        # puertas, ventanas, marcos
+    "aislacion",     # aislacion termica, acustica, poliestireno
+    "techo",         # planchas, cubierta, zinc, pizarreno
+    "adhesivo",      # adhesivos, pegamento, silicona, masilla
+    "grifo",         # griferia, lavamanos, sanitario, wc
+    "ladrillo",      # ladrillo, bloque, piso
+]
 DEFAULT_MAX_PRODUCTS = 0
 FAST_CATEGORY_LIMIT = 20
 ALL_STORES = ["sodimac", "easy", "imperial"]
