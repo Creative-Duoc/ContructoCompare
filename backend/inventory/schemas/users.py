@@ -29,6 +29,22 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
+class PasswordUpdate(BaseModel):
+    contrasena_actual: str
+    nueva_contrasena: str
+
+    @field_validator("nueva_contrasena")
+    @classmethod
+    def validar_nueva_password(cls, value: str) -> str:
+        if len(value) < 8:
+            raise ValueError("La contraseña debe tener al menos 8 caracteres.")
+        if not any(char.isalpha() for char in value):
+            raise ValueError("La contraseña debe incluir al menos una letra.")
+        if not any(char.isdigit() for char in value):
+            raise ValueError("La contraseña debe incluir al menos un número.")
+        return value
+
+
 # para lo que devolvemos al cliente (sin el password)
 class UsuarioResponse(BaseModel):
     id_usuario: int
@@ -40,3 +56,7 @@ class UsuarioResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class UsuarioUpdate(BaseModel):
+    nombre_completo: str
+    correo_electronico: EmailStr

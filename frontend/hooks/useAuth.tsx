@@ -42,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function logout() {
     setUser(null);
     sessionStorage.removeItem('cc_user');
+    sessionStorage.removeItem('cc_token');
   }
 
   return (

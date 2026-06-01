@@ -188,31 +188,45 @@ export async function searchProducts(query: string, categoria?: string): Promise
     
     const grouped = new Map<string, Producto>();
 
+    const latestByStore = new Map<string, { tienda: TiendaPrecio; fecha: Date }>();
+
     data.forEach(item => {
       const id = String(item.id_producto);
-      const tienda: TiendaPrecio = {
-        tienda: item.retailer as any,
-        precio_real: Number(item.precio_clp),
-        precio_oferta: null,
-        stock: Boolean(item.disponibilidad),
-        url_producto: item.link_producto,
-        fecha_actualizacion: new Date(item.fecha_captura).toLocaleDateString('es-CL'),
-      };
+      const storeKey = `${id}__${item.retailer}`;
+      const fecha = new Date(item.fecha_captura);
+      const existing = latestByStore.get(storeKey);
+      if (!existing || fecha > existing.fecha) {
+        latestByStore.set(storeKey, {
+          tienda: {
+            tienda: item.retailer as any,
+            precio_real: Number(item.precio_clp),
+            precio_oferta: null,
+            stock: Boolean(item.disponibilidad),
+            url_producto: item.link_producto,
+            fecha_actualizacion: fecha.toLocaleDateString('es-CL'),
+          },
+          fecha,
+        });
+      }
 
-      if (grouped.has(id)) {
-        grouped.get(id)!.tiendas.push(tienda);
-      } else {
+      if (!grouped.has(id)) {
         grouped.set(id, {
-          id: id,
+          id,
           nombre: item.nombre_producto,
           marca: item.marca || 'Genérico',
           categoria: item.categoria,
-          foto_url: item.foto_url || '', 
+          foto_url: item.foto_url || '',
           sku: item.sku_tienda ? String(item.sku_tienda) : 'S/N',
           unidad: item.valor_medida ? `${item.valor_medida} ${item.abreviatura_unidad || ''}` : 'unidad',
-          tiendas: [tienda],
+          tiendas: [],
         });
       }
+    });
+
+    grouped.forEach((producto, id) => {
+      producto.tiendas = ['Sodimac', 'Easy', 'Imperial']
+        .map(store => latestByStore.get(`${id}__${store}`)?.tienda)
+        .filter((t): t is TiendaPrecio => t !== undefined);
     });
 
     const productos = Array.from(grouped.values());
@@ -283,7 +297,7 @@ export async function fetchPriceHistory(idProducto: string): Promise<PrecioHisto
     return data.map(item => ({
       fecha: item.fecha_captura,
       precio: Number(item.precio_clp),
-      tienda: 'Sodimac' 
+      tienda: RETAILER_NAME_BY_ID[item.id_retailer] ?? 'Sodimac',
     }));
   } catch (error) {
     console.error('Error fetchPriceHistory:', error);
@@ -342,6 +356,26 @@ export async function deleteQuote(id: number): Promise<void> {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
   });
+}
+
+export async function updatePassword(contrasenaActual: string, nuevaContrasena: string): Promise<void> {
+  const token = sessionStorage.getItem('cc_token');
+  if (!token) throw new Error('Sesion expirada. Inicia sesión nuevamente.');
+  await apiFetch('/users/password', {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ contrasena_actual: contrasenaActual, nueva_contrasena: nuevaContrasena }),
+  });
+}
+
+export async function deleteAccount(): Promise<void> {
+  const token = sessionStorage.getItem('cc_token');
+  if (!token) throw new Error('Sesion expirada. Inicia sesión nuevamente.');
+  await apiFetch('/users/me', {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  sessionStorage.removeItem('cc_token');
 }
 
 export async function updateQuote(

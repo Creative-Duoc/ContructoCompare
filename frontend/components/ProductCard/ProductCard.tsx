@@ -49,7 +49,7 @@ export default function ProductCard({ producto, ufValue, showUF, onShowHistory, 
 
       {/* Tabla comparativa multitienda — HU2 */}
       <div className={s.compareTable}>
-        {producto.tiendas.map(tienda => {
+        {producto.tiendas.map((tienda, i) => {
           const final = getPrecioFinal(tienda);
           const isBest = tienda.tienda === best.tienda && final === getPrecioFinal(best); // HU3
           const saving = maxPrecio - final;
@@ -57,7 +57,7 @@ export default function ProductCard({ producto, ufValue, showUF, onShowHistory, 
 
           return (
             <div
-              key={tienda.tienda}
+              key={`${tienda.tienda}-${i}`}
               className={[s.compareRow, isBest && s.bestPrice, !tienda.stock && s.noStock].filter(Boolean).join(' ')}
             >
               {/* HU3 — Badge MEJOR PRECIO */}

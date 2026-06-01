@@ -1,25 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import APIRouter, Depends, HTTPException, Response, status, Query
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-
 from backend.inventory.database import get_db
 from backend.inventory.models.inventory import Cotizacion, DetalleCotizacion
 from backend.inventory.models.users import Usuario
 from backend.inventory.schemas.inventory import CotizacionCreate, CotizacionResponse, CotizacionUpdate
 from backend.inventory.security import ALGORITHM, SECRET_KEY
 
+
 router = APIRouter(prefix="/api/v1/cotizaciones", tags=["Quotes"])
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/users/login")
+security = HTTPBearer()
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> Usuario:
+    token = credentials.credentials
     credenciales_invalidas = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="No se pudo validar el token.",
@@ -42,7 +43,6 @@ async def get_current_user(
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
 
     return usuario_actual
-
 
 async def _get_user_cotizacion(
     cotizacion_id: int,

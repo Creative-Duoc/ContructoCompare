@@ -57,7 +57,6 @@ class PrecioRetailer(Base):
     id_retailer = Column(Integer, ForeignKey("retailer.id_retailer"), nullable=False)
     sku_tienda = Column(String(100), nullable=False) 
     precio_clp = Column(Numeric(12, 2), nullable=False)
-    precio_uf = Column(Numeric(12, 5), nullable=True)
     disponibilidad = Column(Boolean, nullable=False, default=True)
     link_producto = Column(String, nullable=False)
     fecha_captura = Column(DateTime(timezone=True), default=datetime.datetime.utcnow, nullable=False)
