@@ -19,7 +19,6 @@ class PrecioResponse(BaseModel):
     id_retailer: int
     sku_tienda: Optional[str]
     precio_clp: Decimal
-    precio_uf: Optional[Decimal]
     disponibilidad: bool
     fecha_captura: datetime
 
