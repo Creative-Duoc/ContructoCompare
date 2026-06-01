@@ -69,12 +69,13 @@ export default function PriceHistoryModal({ producto, onClose }: Props) {
   // Variación calculada por tienda (no entre tiendas)
   const tableRows = (() => {
     const last: Record<string, number> = {};
-    return [...history].sort((a, b) => toUTCDay(a.fecha) - toUTCDay(b.fecha)).map(h => {
+    const rows = [...history].sort((a, b) => toUTCDay(a.fecha) - toUTCDay(b.fecha)).map(h => {
       const prev = last[h.tienda];
       const diff = prev !== undefined ? h.precio - prev : null;
       last[h.tienda] = h.precio;
       return { ...h, diff };
     });
+    return rows.reverse();
   })();
 
   return (

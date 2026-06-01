@@ -17,8 +17,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
+      const token = sessionStorage.getItem('cc_token');
       const stored = sessionStorage.getItem('cc_user');
-      if (stored) setUser(JSON.parse(stored));
+      if (token && stored) {
+        setUser(JSON.parse(stored));
+      } else {
+        sessionStorage.removeItem('cc_user');
+        sessionStorage.removeItem('cc_token');
+      }
     } catch {}
     setLoading(false);
   }, []);

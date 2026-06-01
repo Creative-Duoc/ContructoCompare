@@ -143,6 +143,7 @@ async function apiFetch(endpoint: string, options: RequestInit = {}) {
     }
     throw new Error(errorData.detail || 'Error en la petición');
   }
+  if (response.status === 204) return;
   return response.json();
 }
 
@@ -166,6 +167,7 @@ async function apiFetchQuotes(endpoint: string, options: RequestInit = {}) {
     }
     throw new Error(errorData.detail || 'Error en la petición');
   }
+  if (response.status === 204) return;
   return response.json();
 }
 
