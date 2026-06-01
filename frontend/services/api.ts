@@ -118,6 +118,11 @@ export function formatProductName(name: string): string {
     .join(' ');
 }
 
+function handleSessionExpired() {
+  sessionStorage.removeItem('cc_token');
+  sessionStorage.removeItem('cc_user');
+}
+
 async function apiFetch(endpoint: string, options: RequestInit = {}) {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
@@ -127,13 +132,15 @@ async function apiFetch(endpoint: string, options: RequestInit = {}) {
     },
   });
   if (!response.ok) {
+    if (response.status === 401) {
+      handleSessionExpired();
+      throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
+    }
     const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
-    
     if (Array.isArray(errorData.detail)) {
       const msg = errorData.detail.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ');
       throw new Error(msg);
     }
-    
     throw new Error(errorData.detail || 'Error en la petición');
   }
   return response.json();
@@ -148,13 +155,15 @@ async function apiFetchQuotes(endpoint: string, options: RequestInit = {}) {
     },
   });
   if (!response.ok) {
+    if (response.status === 401) {
+      handleSessionExpired();
+      throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
+    }
     const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
-
     if (Array.isArray(errorData.detail)) {
       const msg = errorData.detail.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ');
       throw new Error(msg);
     }
-
     throw new Error(errorData.detail || 'Error en la petición');
   }
   return response.json();
