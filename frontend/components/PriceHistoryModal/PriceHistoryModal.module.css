@@ -9,8 +9,8 @@
   position: fixed;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  width: min(680px, 95vw);
-  max-height: 85vh;
+  width: min(760px, 95vw);
+  max-height: 88vh;
   background: #fff;
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xl);
@@ -38,6 +38,9 @@
   display: flex; align-items: center; justify-content: center;
   color: var(--gray-400);
   transition: var(--transition);
+  background: transparent;
+  border: none;
+  cursor: pointer;
 }
 .closeBtn:hover { background: var(--gray-100); color: var(--gray-900); }
 
@@ -66,28 +69,100 @@
 .empty { text-align: center; padding: 32px; color: var(--gray-500); }
 .emptyHint { font-size: .8rem; color: var(--gray-400); margin-top: 6px; }
 
+/* === HU-I5.1 Final: Filtros de fecha === */
+.filters {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 2px 0;
+}
+
+.filterBtn {
+  font-size: .78rem;
+  font-weight: 600;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  transition: var(--transition);
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.filterBtn:hover {
+  background: var(--gray-200);
+  color: var(--gray-900);
+}
+
+.filterActive {
+  background: var(--blue-dark);
+  color: #fff;
+  border-color: var(--blue-dark);
+}
+
+.filterActive:hover {
+  background: var(--blue-dark);
+  color: #fff;
+}
+
+/* === Gráfico === */
 .chartWrap {
   background: var(--gray-50);
   border-radius: var(--radius-md);
   padding: 16px;
   overflow-x: auto;
+  border: 1px solid var(--gray-100);
 }
 
-.chart { width: 100%; min-height: 130px; }
+.chart {
+  width: 100%;
+  min-height: 220px;
+  display: block;
+}
 
+.point {
+  cursor: pointer;
+  transition: r 0.15s ease, stroke-width 0.15s ease;
+}
+
+.point:hover {
+  r: 6;
+  stroke-width: 3;
+}
+
+/* === Leyenda === */
 .legend {
-  display: flex; gap: 16px; justify-content: center;
+  display: flex; gap: 18px; justify-content: center;
   flex-wrap: wrap;
 }
 
 .legendItem {
-  display: flex; align-items: center; gap: 5px;
-  font-size: .75rem; color: var(--gray-600);
+  display: flex; align-items: center; gap: 6px;
+  font-size: .8rem;
+  color: var(--gray-700);
+  font-weight: 500;
+  transition: opacity 0.2s ease;
 }
 
-.legendDot { width: 10px; height: 10px; border-radius: 50%; }
+.legendInactive {
+  opacity: 0.35;
+}
 
+.legendDot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+}
+
+.legendCount {
+  color: var(--gray-400);
+  font-weight: 400;
+  font-size: .75rem;
+}
+
+/* === Tabla === */
 .table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+
 .table th {
   background: var(--gray-100);
   color: var(--gray-600);
@@ -97,8 +172,27 @@
   padding: 8px 12px;
   text-align: left;
 }
-.table td { padding: 8px 12px; border-bottom: 1px solid var(--gray-100); }
-.monoCell { font-family: var(--mono); font-size: .8rem; }
 
-.up { color: var(--red); font-size: .78rem; font-weight: 600; font-family: var(--mono); }
-.down { color: var(--green); font-size: .78rem; font-weight: 600; font-family: var(--mono); }
+.table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.monoCell {
+  font-family: var(--mono);
+  font-size: .8rem;
+}
+
+.up {
+  color: var(--red);
+  font-size: .78rem;
+  font-weight: 600;
+  font-family: var(--mono);
+}
+
+.down {
+  color: var(--green);
+  font-size: .78rem;
+  font-weight: 600;
+  font-family: var(--mono);
+}
