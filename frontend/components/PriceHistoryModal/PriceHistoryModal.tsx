@@ -296,6 +296,7 @@ export default function PriceHistoryModal({ producto, onClose }: Props) {
                   </div>
 
                   {/* Tabla con variación por tienda */}
+                  <div className={s.tableWrap}>
                   <table className={s.table}>
                     <thead>
                       <tr><th>Fecha</th><th>Tienda</th><th>Precio</th><th>Variación</th></tr>
@@ -321,6 +322,7 @@ export default function PriceHistoryModal({ producto, onClose }: Props) {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </>
               )}
             </>

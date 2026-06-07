@@ -36,18 +36,23 @@ export default function Navbar({ ufValue, onOpenQuote }: NavbarProps) {
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <polyline points="14 2 14 8 20 8"/>
           </svg>
-          Mi cotización
+          <span className={s.quoteBtnText}>Mi cotización</span>
           {items.length > 0 && <span className={s.quoteBadge}>{items.length}</span>}
         </button>
 
-        <Link href="/perfil" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <div className={s.userChip} style={{ cursor: 'pointer', transition: 'background 0.2s' }}>
-            <div className={s.avatar}>{initials}</div>
-            <span>{user?.nombre?.split(' ')[0]}</span>
-          </div>
-        </Link>
-
-        <button className={s.logoutBtn} onClick={logout}>Salir</button>
+        {user ? (
+          <>
+            <Link href="/perfil" style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div className={s.userChip} style={{ cursor: 'pointer', transition: 'background 0.2s' }}>
+                <div className={s.avatar}>{initials}</div>
+                <span>{user.nombre?.split(' ')[0]}</span>
+              </div>
+            </Link>
+            <button className={s.logoutBtn} onClick={logout}>Salir</button>
+          </>
+        ) : (
+          <Link href="/login" className={s.loginBtn}>Iniciar sesión</Link>
+        )}
       </div>
     </nav>
   );

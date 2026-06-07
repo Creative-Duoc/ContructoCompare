@@ -196,3 +196,27 @@
   font-weight: 600;
   font-family: var(--mono);
 }
+
+@media (max-width: 640px) {
+  .modal {
+    width: 100vw;
+    max-height: 92vh;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    transform: none;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  }
+
+  .header { padding: 16px 16px 14px; }
+  .body { padding: 14px 16px; gap: 12px; }
+
+  .chartWrap { padding: 10px 8px; }
+
+  /* Tabla con scroll horizontal en mobile */
+  .tableWrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table { min-width: 360px; }
+
+  .filters { gap: 6px; }
+  .filterBtn { padding: 5px 12px; font-size: .74rem; }
+}

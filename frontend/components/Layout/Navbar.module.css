@@ -136,8 +136,32 @@
   color: var(--red);
 }
 
-@media (max-width: 640px) {
-  .navbar { padding: 0 16px; }
+.loginBtn {
+  font-size: .82rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--blue-dark);
+  border-radius: var(--radius-md);
+  padding: 7px 16px;
+  text-decoration: none;
+  transition: var(--transition);
+}
+
+.loginBtn:hover {
+  background: var(--blue-mid);
+}
+
+@media (max-width: 768px) {
   .ufChip { display: none; }
+}
+
+@media (max-width: 640px) {
+  .navbar { padding: 0 12px; gap: 8px; }
+  .brand { font-size: .8rem; }
+  .brandIcon { width: 28px; height: 28px; font-size: .62rem; }
+  .quoteBtnText { display: none; }
+  .quoteBtn { padding: 7px 10px; }
   .userChip span { display: none; }
+  .loginBtn { padding: 7px 12px; font-size: .78rem; }
+  .right { gap: 8px; }
 }

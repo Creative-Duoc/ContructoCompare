@@ -9,7 +9,7 @@ import PriceHistoryModal from '../components/PriceHistoryModal/PriceHistoryModal
 import s from '../styles/App.module.css';
 
 export default function AppPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
 
   const [query, setQuery]           = useState('');
@@ -23,10 +23,8 @@ export default function AppPage() {
   const [historyProduct, setHistoryProduct] = useState<Producto | null>(null);
 
   useEffect(() => {
-    if (!authLoading && !user) router.replace('/');
-    // Búsqueda inicial al cargar
-    if (user) doSearch('', 'Todos');
-  }, [user, authLoading]);
+    doSearch('', 'Todos');
+  }, []);
 
   useEffect(() => { fetchUF().then(d => setUfValue(d.valor)); }, []);
 
@@ -42,12 +40,14 @@ export default function AppPage() {
     setCategoria(cat);
     doSearch(query, cat);
   }
-
-  if (authLoading || !user) return null;
+  function handleOpenQuote() {
+    if (!user) { router.push('/login'); return; }
+    setQuoteOpen(true);
+  }
 
   return (
     <div className={s.page}>
-      <Navbar ufValue={ufValue} onOpenQuote={() => setQuoteOpen(true)} />
+      <Navbar ufValue={ufValue} onOpenQuote={handleOpenQuote} />
 
       {/* Barra de búsqueda — HU1 */}
       <div className={s.searchSection}>

@@ -143,7 +143,7 @@ export default function RegisterPage() {
           </form>
 
           <p className={s.footer}>
-            ¿Ya tienes cuenta? <Link href="/">Inicia sesión</Link>
+            ¿Ya tienes cuenta? <Link href="/login">Inicia sesión</Link>
           </p>
         </div>
       </div>
