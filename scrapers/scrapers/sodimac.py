@@ -276,6 +276,8 @@ class SodimacScraper(BaseStoreScraper):
             "precio_unitario": None, "unidad_medida": None,
             "precio_unitario_fuente": None,
         }
+
+        # Layout legacy: <li data-cmr-price="..."> etc.
         for attr, key in [
             ("data-cmr-price",      "precio_tarjeta"),
             ("data-internet-price", "precio_internet"),
@@ -285,10 +287,28 @@ class SodimacScraper(BaseStoreScraper):
             raw = await self.first_attr(page, [f"li[{attr}]"], attr)
             prices[key] = self.parse_price(raw)
 
+        # Layout nuevo: <div data-variant="PDP_MAIN"> con spans semánticos
+        if not any([prices["precio_tarjeta"], prices["precio_internet"],
+                    prices["precio_oferta"], prices["precio_normal"]]):
+            internet_text = await self.first_text(page, [
+                "[data-variant='PDP_MAIN'] span[class*='internetPrice']",
+                "span[class*='internetPrice']",
+            ])
+            prices["precio_internet"] = self.parse_price(internet_text) if internet_text else None
+
+            normal_text = await self.first_text(page, [
+                "[data-variant='PDP_MAIN'] span[class*='copy12']",
+                "[data-variant='PDP_MAIN'] span",
+            ])
+            prices["precio_normal"] = self.parse_price(normal_text) if normal_text else None
+
+        # Precio unitario (ambos layouts)
         unit_text = await self.first_text(page, [
             "div[class*='pumPrice']",
             "li[data-testid='price-per-unit']",
             "[class*='price-per-unit']",
+            "[data-variant='PDP_MAIN'] [class*='pum-price'] span",
+            "[class*='pum-price'] span",
         ])
         unit_price, unit = self.extract_unit_price_from_text(unit_text)
         if unit_price is not None and unit is not None:
@@ -302,7 +322,9 @@ class SodimacScraper(BaseStoreScraper):
         products: list[dict],
         headless: bool = True,
         workers: int = 4,
+        on_progress: Any | None = None,
     ) -> list[dict]:
+        total = len(products)
         results: list[dict] = []
         queue: asyncio.Queue = asyncio.Queue()
         for product in products:
@@ -339,6 +361,8 @@ class SodimacScraper(BaseStoreScraper):
                             result = {**product, "disponibilidad": False}
                         async with lock:
                             results.append(result)
+                            if on_progress:
+                                on_progress(len(results), total)
                         queue.task_done()
                 finally:
                     await page.close()

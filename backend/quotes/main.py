@@ -10,14 +10,9 @@ if __package__ in {None, ""}:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-<<<<<<< HEAD:backend/app/main.py
-from app.database import Base, engine
-from app.routes import inventory, users
-=======
 from backend.inventory.database import Base, engine
 from backend.inventory.models.inventory import Cotizacion, DetalleCotizacion
 from backend.quotes.routes import quotes
->>>>>>> 02f376ae7a42795309f8148eef863ffcd16e4f4d:backend/quotes/main.py
 
 app = FastAPI(title="ConstructoCompare - Quotes Service")
 AUTO_CREATE_TABLES = os.getenv("AUTO_CREATE_TABLES", "true").lower() in {"1", "true", "yes", "on"}

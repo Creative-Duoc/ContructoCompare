@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import sys
+import time
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -310,6 +311,28 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _make_progress_bar(store: str, total: int):
+    start = time.monotonic()
+
+    def on_progress(done: int, _total: int) -> None:
+        elapsed = time.monotonic() - start
+        rate = done / elapsed if elapsed > 0 else 0
+        remaining = (_total - done) / rate if rate > 0 else 0
+        bar_width = 28
+        filled = int(bar_width * done / _total) if _total else bar_width
+        bar = "█" * filled + "░" * (bar_width - filled)
+        pct = int(100 * done / _total) if _total else 100
+        mins, secs = divmod(int(remaining), 60)
+        eta = f"{mins}m {secs:02d}s" if mins else f"{secs}s"
+        speed = f"{rate:.1f}/s"
+        line = f"\r[{store}] [{bar}] {done}/{_total} ({pct}%) · {speed} · ETA {eta}   "
+        print(line, end="", flush=True)
+        if done >= _total:
+            print()
+
+    return on_progress
+
+
 async def run_daily_refresh(
     selected_stores: list[str],
     headless: bool = True,
@@ -339,7 +362,8 @@ async def run_daily_refresh(
             continue
 
         scraper = scrapers_map[store]()
-        updated = await scraper.scrape_pdp_batch(stale, headless=headless, workers=pdp_workers)
+        on_progress = _make_progress_bar(store, len(stale))
+        updated = await scraper.scrape_pdp_batch(stale, headless=headless, workers=pdp_workers, on_progress=on_progress)
 
         # Upsert en el registro
         product_map = {p["product_url"]: p for p in all_products}

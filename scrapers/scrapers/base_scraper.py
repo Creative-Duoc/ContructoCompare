@@ -493,5 +493,6 @@ class BaseStoreScraper:
         products: list[dict],
         headless: bool = True,
         workers: int = 4,
+        on_progress: Any | None = None,
     ) -> list[dict]:
         raise NotImplementedError

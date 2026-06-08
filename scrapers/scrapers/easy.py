@@ -647,7 +647,9 @@ class EasyScraper(BaseStoreScraper):
         products: list[dict],
         headless: bool = True,
         workers: int = 4,
+        on_progress: Any | None = None,
     ) -> list[dict]:
+        total = len(products)
         results: list[dict] = []
         queue: asyncio.Queue = asyncio.Queue()
         for product in products:
@@ -684,6 +686,8 @@ class EasyScraper(BaseStoreScraper):
                             result = {**product, "disponibilidad": False}
                         async with lock:
                             results.append(result)
+                            if on_progress:
+                                on_progress(len(results), total)
                         queue.task_done()
                 finally:
                     try:

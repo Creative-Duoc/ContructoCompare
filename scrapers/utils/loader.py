@@ -255,10 +255,11 @@ async def load_daily_prices(today: str) -> None:
         skipped_no_db = 0
         skipped_unchanged = 0
         marked_unavailable = 0
+        skipped_no_price = 0
 
         async with SessionLocal() as session:
             async with session.begin():
-                # Obtener retailer
+                # Query 1: obtener retailer
                 res_r = await session.execute(
                     select(Retailer).where(Retailer.nombre_retailer == retailer_name_map[store])
                 )
@@ -267,59 +268,79 @@ async def load_daily_prices(today: str) -> None:
                     print(f"[daily_load] Retailer '{retailer_name_map[store]}' no encontrado en DB, omitiendo.")
                     continue
 
+                all_urls = [p["product_url"] for p in updated if p.get("product_url")]
+                skipped_no_url = len(updated) - len(all_urls)
+                if not all_urls:
+                    continue
+
+                # Query 2: URL → id_producto_maestro para todas las URLs de golpe
+                res_url = await session.execute(
+                    select(PrecioRetailer.link_producto, PrecioRetailer.id_producto_maestro)
+                    .where(PrecioRetailer.link_producto.in_(all_urls))
+                )
+                url_to_product: dict[str, int] = {}
+                for link, pid in res_url.all():
+                    if link not in url_to_product:
+                        url_to_product[link] = pid
+
+                # Query 3: último precio por producto para este retailer, de golpe
+                product_ids = list(set(url_to_product.values()))
+                latest_prices: dict[int, float] = {}
+                if product_ids:
+                    subq = (
+                        select(
+                            PrecioRetailer.id_producto_maestro,
+                            func.max(PrecioRetailer.fecha_captura).label("max_fecha"),
+                        )
+                        .where(
+                            PrecioRetailer.id_producto_maestro.in_(product_ids),
+                            PrecioRetailer.id_retailer == retailer.id_retailer,
+                        )
+                        .group_by(PrecioRetailer.id_producto_maestro)
+                        .subquery()
+                    )
+                    res_prices = await session.execute(
+                        select(PrecioRetailer.id_producto_maestro, PrecioRetailer.precio_clp)
+                        .join(
+                            subq,
+                            (PrecioRetailer.id_producto_maestro == subq.c.id_producto_maestro)
+                            & (PrecioRetailer.fecha_captura == subq.c.max_fecha),
+                        )
+                        .where(PrecioRetailer.id_retailer == retailer.id_retailer)
+                    )
+                    latest_prices = {pid: float(clp) for pid, clp in res_prices.all()}
+
+                # Procesar en memoria — sin más round-trips a la BD
+                to_insert: list[PrecioRetailer] = []
+                unavailable_ids: list[int] = []
+                matched_in_db = 0
+
                 for product in updated:
                     url = product.get("product_url")
                     if not url:
                         continue
 
-                    # Buscar id_producto_maestro por link_producto
-                    res_p = await session.execute(
-                        select(PrecioRetailer.id_producto_maestro)
-                        .where(PrecioRetailer.link_producto == url)
-                        .limit(1)
-                    )
-                    id_producto = res_p.scalar()
+                    id_producto = url_to_product.get(url)
                     if not id_producto:
                         skipped_no_db += 1
                         continue
+                    matched_in_db += 1
 
                     if not product.get("disponibilidad", True):
-                        # Marcar el último registro como no disponible
-                        res_last = await session.execute(
-                            select(PrecioRetailer)
-                            .where(
-                                PrecioRetailer.id_producto_maestro == id_producto,
-                                PrecioRetailer.id_retailer == retailer.id_retailer,
-                            )
-                            .order_by(PrecioRetailer.fecha_captura.desc())
-                            .limit(1)
-                        )
-                        precio_rec = res_last.scalars().first()
-                        if precio_rec and precio_rec.disponibilidad:
-                            precio_rec.disponibilidad = False
-                            marked_unavailable += 1
+                        unavailable_ids.append(id_producto)
                         continue
 
                     price = select_effective_price(product)
                     if price is None:
+                        skipped_no_price += 1
                         continue
 
-                    # Comparar con último precio registrado
-                    res_latest = await session.execute(
-                        select(PrecioRetailer.precio_clp)
-                        .where(
-                            PrecioRetailer.id_producto_maestro == id_producto,
-                            PrecioRetailer.id_retailer == retailer.id_retailer,
-                        )
-                        .order_by(PrecioRetailer.fecha_captura.desc())
-                        .limit(1)
-                    )
-                    latest_price = res_latest.scalar()
-                    if latest_price is not None and round(float(latest_price)) == round(float(price)):
+                    latest = latest_prices.get(id_producto)
+                    if latest is not None and round(float(latest)) == round(float(price)):
                         skipped_unchanged += 1
                         continue
 
-                    session.add(PrecioRetailer(
+                    to_insert.append(PrecioRetailer(
                         id_producto_maestro=id_producto,
                         id_retailer=retailer.id_retailer,
                         sku_tienda=str(product.get("sku_store") or ""),
@@ -330,10 +351,30 @@ async def load_daily_prices(today: str) -> None:
                     ))
                     inserted += 1
 
+                # Bulk insert de nuevos precios
+                if to_insert:
+                    session.add_all(to_insert)
+
+                # Marcar no disponibles (son pocos, queries individuales están bien)
+                for id_producto in unavailable_ids:
+                    res_last = await session.execute(
+                        select(PrecioRetailer)
+                        .where(
+                            PrecioRetailer.id_producto_maestro == id_producto,
+                            PrecioRetailer.id_retailer == retailer.id_retailer,
+                        )
+                        .order_by(PrecioRetailer.fecha_captura.desc())
+                        .limit(1)
+                    )
+                    precio_rec = res_last.scalars().first()
+                    if precio_rec and precio_rec.disponibilidad:
+                        precio_rec.disponibilidad = False
+                        marked_unavailable += 1
+
         print(
-            f"[daily_load][{store}] insertados={inserted} "
-            f"sin_cambio={skipped_unchanged} sin_db={skipped_no_db} "
-            f"no_disponibles={marked_unavailable}"
+            f"[daily_load][{store}] insertados={inserted} sin_cambio={skipped_unchanged} "
+            f"sin_db={skipped_no_db} matched_in_db={matched_in_db} "
+            f"sin_precio={skipped_no_price} sin_url={skipped_no_url} no_disponibles={marked_unavailable}"
         )
 
 

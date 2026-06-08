@@ -17,7 +17,7 @@ from backend.inventory.security import (
     verify_password,
 )
 
-from backend.inventory.main import limiter
+from backend.inventory.limiter import limiter
 
 router = APIRouter(prefix="/api/v1/users", tags=["User Management"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/users/login")
