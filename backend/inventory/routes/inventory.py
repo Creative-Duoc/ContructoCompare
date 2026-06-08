@@ -9,6 +9,12 @@ from backend.inventory.schemas.inventory import (
     PrecioResponse,
     ProductoGeneralResponse,
 )
+from backend.inventory.models.inventory import Cotizacion, DetalleCotizacion
+from backend.inventory.schemas.inventory import CotizacionCreate, CotizacionResponse
+from backend.inventory.routes.users import get_current_user
+from backend.inventory.models.users import Usuario
+from sqlalchemy.orm import selectinload
+from typing import List
 
 router = APIRouter(prefix="/api/v1/inventory", tags=["Inventory Engine"])
 

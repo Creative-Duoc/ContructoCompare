@@ -43,6 +43,7 @@ class ProductRecord:
     unidad_medida: str | None = None
     precio_unitario_fuente: str | None = None
     image_url: str | None = None
+    fecha_ultima_revision: str | None = None
 
 
 class RobotsGuard:
@@ -485,4 +486,13 @@ class BaseStoreScraper:
         )
 
     async def scrape(self, queries: list[str], **kwargs: Any) -> list[ProductRecord]:
+        raise NotImplementedError
+
+    async def scrape_pdp_batch(
+        self,
+        products: list[dict],
+        headless: bool = True,
+        workers: int = 4,
+        on_progress: Any | None = None,
+    ) -> list[dict]:
         raise NotImplementedError

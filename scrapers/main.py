@@ -4,10 +4,10 @@ import argparse
 import asyncio
 import json
 import sys
+import time
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
 
 # Ensure the root directory is in sys.path for database and model imports
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -15,10 +15,10 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from core.gold import write_gold_datasets
-from core.persistence import write_json_atomic
+from core.persistence import read_json_file, write_json_atomic
 from core.transformer import write_matching_preview, write_silver_dataset
 from utils.run_gold_review_llm import run_gold_review_llm
-from utils.loader import load_gold
+from utils.loader import load_daily_prices, load_gold
 from scrapers.base_scraper import ProductRecord
 from scrapers.easy import EasyScraper
 from scrapers.imperial import ImperialScraper
@@ -48,54 +48,52 @@ FAST_CATEGORY_LIMIT = 20
 ALL_STORES = ["sodimac", "easy", "imperial"]
 
 
-def deduplicate(products: Iterable[ProductRecord]) -> list[ProductRecord]:
-    seen_urls: set[str] = set()
-    result: list[ProductRecord] = []
 
-    for product in products:
-        if product.product_url in seen_urls:
-            continue
-        seen_urls.add(product.product_url)
-        result.append(product)
-
-    return result
-
-
-def compute_metrics(store: str, products: list[ProductRecord]) -> dict[str, int | str]:
+def compute_metrics(store: str, records: list[dict]) -> dict[str, int | str]:
     return {
         "store": store,
-        "total_products": len(products),
+        "total_products": len(records),
         "with_any_price": sum(
-            1
-            for p in products
-            if any(
-                [
-                    p.precio_normal,
-                    p.precio_internet,
-                    p.precio_oferta,
-                    p.precio_tarjeta,
-                    p.precio_unitario,
-                ]
-            )
+            1 for p in records
+            if any([p.get("precio_normal"), p.get("precio_internet"),
+                    p.get("precio_oferta"), p.get("precio_tarjeta"), p.get("precio_unitario")])
         ),
-        "with_sku": sum(1 for p in products if bool(p.sku_store)),
-        "with_precio_tarjeta": sum(1 for p in products if p.precio_tarjeta is not None),
-        "with_precio_unitario": sum(1 for p in products if p.precio_unitario is not None),
+        "with_sku": sum(1 for p in records if bool(p.get("sku_store"))),
+        "with_precio_tarjeta": sum(1 for p in records if p.get("precio_tarjeta") is not None),
+        "with_precio_unitario": sum(1 for p in records if p.get("precio_unitario") is not None),
     }
 
 
-def save_store_output(store: str, products: list[ProductRecord]) -> dict[str, int | str]:
+def save_store_output(store: str, products: list[ProductRecord], today: str) -> dict[str, int | str]:
     BRONZE_DIR.mkdir(parents=True, exist_ok=True)
-    metrics = compute_metrics(store, products)
 
+    # Cargar registro acumulativo existente
+    output_path = BRONZE_DIR / f"{store}_products.json"
+    existing_map: dict[str, dict] = {}
+    if output_path.exists():
+        try:
+            existing_data = read_json_file(output_path)
+            for p in existing_data.get("products", []):
+                url = p.get("product_url")
+                if url:
+                    existing_map[url] = p
+        except Exception:
+            pass
+
+    # Upsert: productos nuevos sobreescriben los existentes y marcan la fecha
+    for product in products:
+        record = asdict(product)
+        record["fecha_ultima_revision"] = today
+        existing_map[product.product_url] = record
+
+    merged = list(existing_map.values())
+    metrics = compute_metrics(store, merged)
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "total_products": len(products),
+        "total_products": len(merged),
         "metrics": metrics,
-        "products": [asdict(product) for product in products],
+        "products": merged,
     }
-
-    output_path = BRONZE_DIR / f"{store}_products.json"
     write_json_atomic(output_path, payload)
     return metrics
 
@@ -151,7 +149,10 @@ async def run_bronze(
     easy_category_workers: int,
     imperial_max_category_urls: int,
     imperial_category_workers: int,
+    today: str | None = None,
 ) -> dict[str, dict[str, int | str]]:
+    if not today:
+        today = datetime.now(timezone.utc).date().isoformat()
     metrics_by_store: dict[str, dict[str, int | str]] = {}
     scrapers_to_run: list[tuple[str, object]] = []
     if "sodimac" in selected_stores:
@@ -178,7 +179,6 @@ async def run_bronze(
             scrape_kwargs["category_workers"] = imperial_category_workers
 
         products = await scraper.scrape(scraper_queries, **scrape_kwargs)
-        products = deduplicate(products)
 
         category_hints: dict[str, str] = {}
         for product in products:
@@ -186,7 +186,7 @@ async def run_bronze(
             if category_url:
                 category_hints[product.product_url] = category_url
 
-        metrics = save_store_output(store_name, products)
+        metrics = save_store_output(store_name, products, today)
         save_store_category_hints(store_name, category_hints)
         metrics_by_store[store_name] = metrics
 
@@ -245,6 +245,19 @@ def parse_args() -> argparse.Namespace:
     bronze_group.add_argument("--only-imperial", action="store_true")
     bronze_group.add_argument("--headful", action="store_true", help="Run visible browser.")
     bronze_group.add_argument(
+        "--daily-refresh",
+        action="store_true",
+        dest="daily_refresh",
+        help="Modo diario: refresca precios via PDP para productos no visitados hoy. No corre descubrimiento.",
+    )
+    bronze_group.add_argument(
+        "--pdp-workers",
+        type=int,
+        default=4,
+        dest="pdp_workers",
+        help="Workers paralelos para el pase de PDP en --daily-refresh (default: 4).",
+    )
+    bronze_group.add_argument(
         "--fast",
         action="store_true",
         help="Modo rapido: limita a 20 categorias por tienda si no se especifica otro limite.",
@@ -298,8 +311,107 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _make_progress_bar(store: str, total: int):
+    start = time.monotonic()
+
+    def on_progress(done: int, _total: int) -> None:
+        elapsed = time.monotonic() - start
+        rate = done / elapsed if elapsed > 0 else 0
+        remaining = (_total - done) / rate if rate > 0 else 0
+        bar_width = 28
+        filled = int(bar_width * done / _total) if _total else bar_width
+        bar = "█" * filled + "░" * (bar_width - filled)
+        pct = int(100 * done / _total) if _total else 100
+        mins, secs = divmod(int(remaining), 60)
+        eta = f"{mins}m {secs:02d}s" if mins else f"{secs}s"
+        speed = f"{rate:.1f}/s"
+        line = f"\r[{store}] [{bar}] {done}/{_total} ({pct}%) · {speed} · ETA {eta}   "
+        print(line, end="", flush=True)
+        if done >= _total:
+            print()
+
+    return on_progress
+
+
+async def run_daily_refresh(
+    selected_stores: list[str],
+    headless: bool = True,
+    pdp_workers: int = 4,
+) -> None:
+    today = datetime.now(timezone.utc).date().isoformat()
+    print(f"\n{'='*60}\nDAILY REFRESH — {today}\n{'='*60}")
+
+    scrapers_map = {
+        "sodimac": SodimacScraper,
+        "easy": EasyScraper,
+        "imperial": ImperialScraper,
+    }
+
+    for store in selected_stores:
+        path = BRONZE_DIR / f"{store}_products.json"
+        if not path.exists():
+            print(f"[{store}] Sin registro Bronze, omitiendo.")
+            continue
+
+        data = read_json_file(path)
+        all_products = data.get("products", [])
+        stale = [p for p in all_products if p.get("fecha_ultima_revision") != today]
+        print(f"[{store}] {len(stale)} productos desactualizados / {len(all_products)} total")
+        if not stale:
+            print(f"[{store}] Todo actualizado, omitiendo.")
+            continue
+
+        scraper = scrapers_map[store]()
+        on_progress = _make_progress_bar(store, len(stale))
+        updated = await scraper.scrape_pdp_batch(stale, headless=headless, workers=pdp_workers, on_progress=on_progress)
+
+        # Upsert en el registro
+        product_map = {p["product_url"]: p for p in all_products}
+        refreshed = 0
+        for upd in updated:
+            url = upd.get("product_url")
+            if not url or url not in product_map:
+                continue
+            product_map[url].update({
+                "precio_normal":          upd.get("precio_normal"),
+                "precio_internet":        upd.get("precio_internet"),
+                "precio_oferta":          upd.get("precio_oferta"),
+                "precio_tarjeta":         upd.get("precio_tarjeta"),
+                "precio_unitario":        upd.get("precio_unitario"),
+                "unidad_medida":          upd.get("unidad_medida"),
+                "precio_unitario_fuente": upd.get("precio_unitario_fuente"),
+                "disponibilidad":         upd.get("disponibilidad", True),
+                "fecha_ultima_revision":  today,
+            })
+            refreshed += 1
+
+        merged = list(product_map.values())
+        metrics = compute_metrics(store, merged)
+        write_json_atomic(path, {
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "total_products": len(merged),
+            "metrics": metrics,
+            "products": merged,
+        })
+        print(f"[{store}] {refreshed} productos refrescados. Registro: {len(merged)} total.")
+
+    print("\nCargando precios actualizados a la BD...")
+    await load_daily_prices(today)
+    print("Daily refresh completado.")
+
+
 async def main() -> None:
     args = parse_args()
+
+    # --- MODO DIARIO: bypasa todo el pipeline de descubrimiento ---
+    if args.daily_refresh:
+        selected_stores = resolve_selected_stores(args)
+        await run_daily_refresh(
+            selected_stores,
+            headless=not args.headful,
+            pdp_workers=args.pdp_workers,
+        )
+        return
 
     if args.fast:
         if args.sodimac_max_category_urls == 0:
@@ -308,7 +420,7 @@ async def main() -> None:
             args.easy_max_category_urls = FAST_CATEGORY_LIMIT
         if args.imperial_max_category_urls == 0:
             args.imperial_max_category_urls = FAST_CATEGORY_LIMIT
-    
+
     # Logic to determine which stages to run
     run_all = not any([args.only_bronze, args.only_silver, args.only_gold, args.only_llm, args.only_load])
     
@@ -322,6 +434,7 @@ async def main() -> None:
     if do_bronze:
         print("\n" + "="*60 + "\nSTAGE: BRONZE (SCRAPING)\n" + "="*60)
         selected_stores = resolve_selected_stores(args)
+        today = datetime.now(timezone.utc).date().isoformat()
         await run_bronze(
             queries=args.queries,
             max_products=args.max_products,
@@ -333,6 +446,7 @@ async def main() -> None:
             easy_category_workers=args.easy_category_workers,
             imperial_max_category_urls=args.imperial_max_category_urls,
             imperial_category_workers=args.imperial_category_workers,
+            today=today,
         )
 
     # --- 2. SILVER ---

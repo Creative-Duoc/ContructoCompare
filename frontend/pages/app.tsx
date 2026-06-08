@@ -1,4 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+
+const ITEMS_PER_PAGE = 24;
 import { useRouter } from 'next/router';
 import { useAuth } from '../hooks/useAuth';
 import { searchProducts, fetchUF, CATEGORIAS, Producto } from '../services/api';
@@ -21,6 +23,8 @@ export default function AppPage() {
   const [showUF, setShowUF]         = useState(false);  // HU6
   const [quoteOpen, setQuoteOpen]   = useState(false);
   const [historyProduct, setHistoryProduct] = useState<Producto | null>(null);
+  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     doSearch('', 'Todos');
@@ -30,10 +34,23 @@ export default function AppPage() {
 
   const doSearch = useCallback(async (q: string, cat: string) => {
     setSearching(true); setSearched(false);
+    setVisibleCount(ITEMS_PER_PAGE);
     const results = await searchProducts(q, cat);
     setProductos(results);
     setSearching(false); setSearched(true);
   }, []);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        setVisibleCount(prev => Math.min(prev + ITEMS_PER_PAGE, productos.length));
+      }
+    }, { threshold: 0.1 });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [productos.length]);
 
   function handleSearch() { doSearch(query, categoria); }
   function handleCategoryChange(cat: string) {
@@ -138,18 +155,26 @@ export default function AppPage() {
 
         {/* Grid de productos — HU2 HU3 */}
         {!searching && productos.length > 0 && (
-          <div className={s.grid}>
-            {productos.map((p, i) => (
-              <ProductCard
-                key={p.id}
-                producto={p}
-                ufValue={ufValue}
-                showUF={showUF}
-                onShowHistory={setHistoryProduct}
-                animDelay={i * 0.05}
-              />
-            ))}
-          </div>
+          <>
+            <div className={s.grid}>
+              {productos.slice(0, visibleCount).map((p, i) => (
+                <ProductCard
+                  key={p.id}
+                  producto={p}
+                  ufValue={ufValue}
+                  showUF={showUF}
+                  onShowHistory={setHistoryProduct}
+                  animDelay={i * 0.05}
+                />
+              ))}
+            </div>
+            <div ref={sentinelRef} style={{ height: 1 }} />
+            {visibleCount < productos.length && (
+              <p style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '16px 0', fontSize: '0.9rem' }}>
+                Mostrando {visibleCount} de {productos.length} productos
+              </p>
+            )}
+          </>
         )}
       </main>
 

@@ -216,6 +216,67 @@ class EasyScraper(BaseStoreScraper):
 
         return []
 
+    def extract_prices_from_text(self, text: str) -> dict[str, int | str | None]:
+        """Versión texto-only de extract_prices, usada en PDP donde no hay card DOM."""
+        prices: dict[str, int | str | None] = {
+            "precio_tarjeta": None, "precio_internet": None,
+            "precio_oferta": None, "precio_normal": None,
+            "precio_unitario": None, "unidad_medida": None,
+            "precio_unitario_fuente": None,
+        }
+        if not text:
+            return prices
+
+        normalized = text.replace("²", "2").replace("³", "3")
+
+        # Precio unitario explícito: "$X por lt/m2/kg"
+        unit_price, unit = self.extract_unit_price_from_text(normalized)
+        if unit_price is not None and unit is not None:
+            prices["precio_unitario"]        = unit_price
+            prices["unidad_medida"]          = unit
+            prices["precio_unitario_fuente"] = "pdp"
+
+        # Precio normal etiquetado
+        normal_match = re.search(r"Normal\s*:?\s*\$\s*([\d\.\,]+)", normalized, re.IGNORECASE)
+        if normal_match:
+            prices["precio_normal"] = self.parse_price(normal_match.group(1))
+
+        # Precio internet
+        internet_match = re.search(r"(?:Internet|Online)\s*:?\s*\$\s*([\d\.\,]+)", normalized, re.IGNORECASE)
+        if internet_match:
+            prices["precio_internet"] = self.parse_price(internet_match.group(1))
+
+        # Precio tarjeta (texto — sin badge DOM)
+        card_match = re.search(
+            r"(?:CAT|CMR|Cencosud|Tarjeta)[^\$]{0,24}\$\s*([\d\.\,]+)", normalized, re.IGNORECASE
+        )
+        if card_match:
+            prices["precio_tarjeta"] = self.parse_price(card_match.group(1))
+
+        # Inferir precio oferta: todos los montos restantes
+        all_amounts = [self.parse_price(v) for v in re.findall(r"\$\s*[\d\.\,]+", normalized)]
+        remaining = [v for v in all_amounts if v is not None]
+        for used in [prices["precio_normal"], prices["precio_internet"],
+                     prices["precio_tarjeta"], prices["precio_unitario"]]:
+            if used is None:
+                continue
+            removed = False
+            filtered: list[int] = []
+            for a in remaining:
+                if not removed and a == used:
+                    removed = True; continue
+                filtered.append(a)
+            remaining = filtered
+
+        if prices["precio_normal"] is None and len(remaining) == 1:
+            prices["precio_normal"] = remaining[0]
+        elif prices["precio_normal"] is not None and remaining:
+            candidate = remaining[0]
+            if candidate < prices["precio_normal"]:  # type: ignore[operator]
+                prices["precio_oferta"] = candidate
+
+        return prices
+
     async def extract_prices(self, card: Any) -> dict[str, int | str | None]:
         prices: dict[str, int | str | None] = {
             "precio_tarjeta": None,
@@ -563,3 +624,85 @@ class EasyScraper(BaseStoreScraper):
 
         self.logger.info("Easy products extracted: %d", len(products))
         return products
+
+    async def _extract_pdp_prices(self, page: Any) -> dict:
+        text = ""
+        for sel in ["[class*='cnCvcl']", "div[class*='sc-dfcdd256']", "main"]:
+            try:
+                el = await page.query_selector(sel)
+                if el:
+                    text = clean_text(await el.inner_text())
+                    break
+            except PlaywrightError:
+                pass
+        if not text:
+            try:
+                text = clean_text(await page.inner_text("body"))
+            except PlaywrightError:
+                pass
+        return self.extract_prices_from_text(text)
+
+    async def scrape_pdp_batch(
+        self,
+        products: list[dict],
+        headless: bool = True,
+        workers: int = 4,
+        on_progress: Any | None = None,
+    ) -> list[dict]:
+        total = len(products)
+        results: list[dict] = []
+        queue: asyncio.Queue = asyncio.Queue()
+        for product in products:
+            queue.put_nowait(product)
+
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(headless=headless)
+            context = await browser.new_context(user_agent=self.user_agent, locale="es-CL")
+            lock = asyncio.Lock()
+
+            async def worker() -> None:
+                page = await context.new_page()
+                try:
+                    while True:
+                        try:
+                            product = queue.get_nowait()
+                        except asyncio.QueueEmpty:
+                            break
+                        url = product.get("product_url", "")
+                        try:
+                            loaded = await self.goto_safe(page, url)
+                            if not loaded:
+                                result = {**product, "disponibilidad": False}
+                            else:
+                                prices = await self._extract_pdp_prices(page)
+                                has_price = any(
+                                    prices.get(k) for k in
+                                    ["precio_normal", "precio_internet", "precio_oferta",
+                                     "precio_tarjeta", "precio_unitario"]
+                                )
+                                result = {**product, **prices, "disponibilidad": has_price}
+                        except Exception as exc:
+                            self.logger.error("PDP error | url=%s | %s", url, exc)
+                            result = {**product, "disponibilidad": False}
+                        async with lock:
+                            results.append(result)
+                            if on_progress:
+                                on_progress(len(results), total)
+                        queue.task_done()
+                finally:
+                    try:
+                        await page.close()
+                    except PlaywrightError:
+                        pass
+
+            worker_count = min(max(1, workers), len(products))
+            tasks = [asyncio.create_task(worker()) for _ in range(worker_count)]
+            await asyncio.gather(*tasks)
+            for closer in (context.close, browser.close):
+                try:
+                    await closer()
+                except PlaywrightError:
+                    pass
+
+        self.logger.info("Easy PDP batch: %d processed", len(results))
+        return results

@@ -8,7 +8,6 @@ import asyncio
 import json
 import sys
 import re
-import hashlib
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -18,15 +17,16 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from sqlalchemy.future import select
-from sqlalchemy import text
 from sqlalchemy import func
 
 from backend.inventory.database import SessionLocal
 from backend.inventory.models.inventory import Categoria, PrecioRetailer, ProductoMaestro, Retailer, Marca, UnidadMedida
-from core.normalizer import extract_numeric_specs, normalize_unit_value
+from core.normalizer import extract_numeric_specs
+from core.transformer import select_effective_price
 
 # Configuración de archivos
 DEFAULT_GOLD_JSON = ROOT_DIR / "scrapers" / "data" / "gold" / "gold_products.json"
+DEFAULT_BRONZE_DIR = ROOT_DIR / "scrapers" / "data" / "bronze"
 
 RETAILER_METADATA = {
     "sodimac": {"name": "Sodimac", "url": "https://www.sodimac.cl", "logo": "logos/sodimac.png"},
@@ -89,9 +89,6 @@ async def load_gold(json_path: Path = DEFAULT_GOLD_JSON) -> None:
 
     async with SessionLocal() as session:
         async with session.begin():
-            await session.execute(
-                text("ALTER TABLE producto_maestro ADD COLUMN IF NOT EXISTS foto_url VARCHAR")
-            )
             # --- 1. PREPARACIÓN Y CACHÉ ---
             retailer_map = {}
             category_map = {}
@@ -201,7 +198,7 @@ async def load_gold(json_path: Path = DEFAULT_GOLD_JSON) -> None:
                     retailer = retailer_map[store_key]
                     
                     ultimo_precio = precio_cache.get((id_producto_maestro, retailer.id_retailer))
-                    if ultimo_precio is not None and float(ultimo_precio) == float(price):
+                    if ultimo_precio is not None and round(float(ultimo_precio)) == round(float(price)):
                         unchanged_prices += 1
                         continue
                         
@@ -235,6 +232,151 @@ async def load_gold(json_path: Path = DEFAULT_GOLD_JSON) -> None:
                 new_prices_count,
                 unchanged_prices
             )
+
+async def load_daily_prices(today: str) -> None:
+    """Carga precios actualizados hoy desde Bronze directamente a la BD, sin pasar por Silver/Gold."""
+    stores = ["sodimac", "easy", "imperial"]
+    retailer_name_map = {"sodimac": "Sodimac", "easy": "Easy", "imperial": "Imperial"}
+
+    for store in stores:
+        path = DEFAULT_BRONZE_DIR / f"{store}_products.json"
+        if not path.exists():
+            continue
+
+        data = json.loads(path.read_text(encoding="utf-8"))
+        updated = [
+            p for p in data.get("products", [])
+            if p.get("fecha_ultima_revision") == today
+        ]
+        if not updated:
+            continue
+
+        inserted = 0
+        skipped_no_db = 0
+        skipped_unchanged = 0
+        marked_unavailable = 0
+        skipped_no_price = 0
+
+        async with SessionLocal() as session:
+            async with session.begin():
+                # Query 1: obtener retailer
+                res_r = await session.execute(
+                    select(Retailer).where(Retailer.nombre_retailer == retailer_name_map[store])
+                )
+                retailer = res_r.scalars().first()
+                if not retailer:
+                    print(f"[daily_load] Retailer '{retailer_name_map[store]}' no encontrado en DB, omitiendo.")
+                    continue
+
+                all_urls = [p["product_url"] for p in updated if p.get("product_url")]
+                skipped_no_url = len(updated) - len(all_urls)
+                if not all_urls:
+                    continue
+
+                # Query 2: URL → id_producto_maestro para todas las URLs de golpe
+                res_url = await session.execute(
+                    select(PrecioRetailer.link_producto, PrecioRetailer.id_producto_maestro)
+                    .where(PrecioRetailer.link_producto.in_(all_urls))
+                )
+                url_to_product: dict[str, int] = {}
+                for link, pid in res_url.all():
+                    if link not in url_to_product:
+                        url_to_product[link] = pid
+
+                # Query 3: último precio por producto para este retailer, de golpe
+                product_ids = list(set(url_to_product.values()))
+                latest_prices: dict[int, float] = {}
+                if product_ids:
+                    subq = (
+                        select(
+                            PrecioRetailer.id_producto_maestro,
+                            func.max(PrecioRetailer.fecha_captura).label("max_fecha"),
+                        )
+                        .where(
+                            PrecioRetailer.id_producto_maestro.in_(product_ids),
+                            PrecioRetailer.id_retailer == retailer.id_retailer,
+                        )
+                        .group_by(PrecioRetailer.id_producto_maestro)
+                        .subquery()
+                    )
+                    res_prices = await session.execute(
+                        select(PrecioRetailer.id_producto_maestro, PrecioRetailer.precio_clp)
+                        .join(
+                            subq,
+                            (PrecioRetailer.id_producto_maestro == subq.c.id_producto_maestro)
+                            & (PrecioRetailer.fecha_captura == subq.c.max_fecha),
+                        )
+                        .where(PrecioRetailer.id_retailer == retailer.id_retailer)
+                    )
+                    latest_prices = {pid: float(clp) for pid, clp in res_prices.all()}
+
+                # Procesar en memoria — sin más round-trips a la BD
+                to_insert: list[PrecioRetailer] = []
+                unavailable_ids: list[int] = []
+                matched_in_db = 0
+
+                for product in updated:
+                    url = product.get("product_url")
+                    if not url:
+                        continue
+
+                    id_producto = url_to_product.get(url)
+                    if not id_producto:
+                        skipped_no_db += 1
+                        continue
+                    matched_in_db += 1
+
+                    if not product.get("disponibilidad", True):
+                        unavailable_ids.append(id_producto)
+                        continue
+
+                    price = select_effective_price(product)
+                    if price is None:
+                        skipped_no_price += 1
+                        continue
+
+                    latest = latest_prices.get(id_producto)
+                    if latest is not None and round(float(latest)) == round(float(price)):
+                        skipped_unchanged += 1
+                        continue
+
+                    to_insert.append(PrecioRetailer(
+                        id_producto_maestro=id_producto,
+                        id_retailer=retailer.id_retailer,
+                        sku_tienda=str(product.get("sku_store") or ""),
+                        precio_clp=price,
+                        disponibilidad=True,
+                        link_producto=url,
+                        fecha_captura=datetime.now(timezone.utc),
+                    ))
+                    inserted += 1
+
+                # Bulk insert de nuevos precios
+                if to_insert:
+                    session.add_all(to_insert)
+
+                # Marcar no disponibles (son pocos, queries individuales están bien)
+                for id_producto in unavailable_ids:
+                    res_last = await session.execute(
+                        select(PrecioRetailer)
+                        .where(
+                            PrecioRetailer.id_producto_maestro == id_producto,
+                            PrecioRetailer.id_retailer == retailer.id_retailer,
+                        )
+                        .order_by(PrecioRetailer.fecha_captura.desc())
+                        .limit(1)
+                    )
+                    precio_rec = res_last.scalars().first()
+                    if precio_rec and precio_rec.disponibilidad:
+                        precio_rec.disponibilidad = False
+                        marked_unavailable += 1
+
+        print(
+            f"[daily_load][{store}] insertados={inserted} sin_cambio={skipped_unchanged} "
+            f"sin_db={skipped_no_db} matched_in_db={matched_in_db} "
+            f"sin_precio={skipped_no_price} sin_url={skipped_no_url} no_disponibles={marked_unavailable}"
+        )
+
 
 if __name__ == "__main__":
     asyncio.run(load_gold())
