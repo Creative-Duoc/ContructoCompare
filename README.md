@@ -2,6 +2,15 @@
 
 ConstructoCompare es una plataforma integral diseñada para el monitoreo y comparación de precios de materiales de construcción de diversos retailers. El sistema automatiza la recolección de datos, su procesamiento y su exposición a través de una API robusta.
 
+## 👥 Estructura del Equipo y Roles
+
+El proyecto fue planificado, desarrollado y certificado por el siguiente equipo técnico:
+
+*   **Javiera Ramírez** – *Product Owner / Data Engineer*: Responsable del diseño y tuning del modelo de datos PostgreSQL, persistencia, lógica del ID Maestro y despliegue de infraestructura cloud.
+*   **Samuel Bueno** – *Scrum Master / Backend Developer*: Desarrollador del Core API en FastAPI, lógica asíncrona de comparación y programación de los motores de ingesta (Scrapers).
+*   **Israel González** – *Frontend Developer / UX Designer*: Diseñador de la interfaz progresiva con enfoque Mobile-First en Next.js, componentes analíticos, toggles de divisas (CLP/UF) y renderizado adaptativo.
+*   **Genara Alarcón** – *QA Engineer / DevOps*: Responsable de la estrategia y ejecución de la matriz de pruebas (37 casos), auditorías de seguridad perimetral, logs de telemetría y validación del DoD.
+
 ## 🏗️ Arquitectura del Proyecto
 
 El proyecto está dividido en cuatro componentes principales:
@@ -17,7 +26,7 @@ El proyecto está dividido en cuatro componentes principales:
 
 - Python 3.13+
 - PostgreSQL
-- Node.js (para el futuro frontend)
+- Node.js 
 
 ### Instalación General
 
